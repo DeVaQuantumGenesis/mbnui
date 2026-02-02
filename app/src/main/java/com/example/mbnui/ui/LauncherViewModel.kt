@@ -142,8 +142,6 @@ class LauncherViewModel @Inject constructor(
     // New method called by UI with Grid coordinates
     fun onItemDrop(itemId: String, targetX: Int, targetY: Int) {
         // Check bounds
-    fun onItemDrop(itemId: String, targetX: Int, targetY: Int) {
-        // Check bounds
         if (targetX < 0 || targetX >= _gridCols.value || targetY < 0 || targetY >= _gridRows.value) return
         
         val item = _homeItems.value.find { it.id == itemId } ?: return

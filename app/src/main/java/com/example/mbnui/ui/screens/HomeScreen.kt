@@ -60,6 +60,8 @@ import com.example.mbnui.ui.components.AppItem
 import com.example.mbnui.ui.components.DockItem
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerInputChange
 
 @Composable
 fun HomeScreen(
@@ -391,6 +393,46 @@ fun HomeScreen(
                 },
                 onDismiss = { showSettingsSheet = false }
             )
+        }
+    }
+}
+
+@Composable
+fun WidgetStack(
+    stack: HomeWidgetStack,
+    appWidgetHost: android.appwidget.AppWidgetHost
+) {
+    var currentIndex by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    
+    Box(
+        modifier = Modifier.fillMaxSize().padding(8.dp)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures { change, dragAmount ->
+                    change.consume()
+                    if (dragAmount > 20) currentIndex = (currentIndex + 1) % stack.widgets.size
+                    else if (dragAmount < -20) currentIndex = (currentIndex - 1 + stack.widgets.size) % stack.widgets.size
+                }
+            }
+    ) {
+        val currentWidget = stack.widgets.getOrNull(currentIndex)
+        
+        if (currentWidget != null) {
+            val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
+            val appWidgetInfo = appWidgetManager.getAppWidgetInfo(currentWidget.appWidgetId)
+            
+            if (appWidgetInfo != null) {
+                AndroidView(
+                    factory = { ctx ->
+                        appWidgetHost.createView(ctx, currentWidget.appWidgetId, appWidgetInfo).apply { setPadding(0, 0, 0, 0) }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                 GlassBox(modifier = Modifier.fillMaxSize(), cornerRadius = 24.dp, isDark = true) {
+                    Text("Widget Error", color = Color.White, modifier = Modifier.align(Alignment.Center))
+                }
+            }
         }
     }
 }
