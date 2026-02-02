@@ -76,6 +76,21 @@ class LauncherViewModel @Inject constructor(
     fun setGridSize(cols: Int, rows: Int) {
         _gridCols.value = cols
         _gridRows.value = rows
+        
+        // Sanitize items that are now out of bounds
+        _homeItems.value = _homeItems.value.map { item ->
+            val maxX = cols - (if (item is HomeWidgetStack) item.sizeX else 1)
+            val maxY = rows - (if (item is HomeWidgetStack) item.sizeY else 1)
+            
+            val newX = item.x.coerceAtMost(maxX.coerceAtLeast(0))
+            val newY = item.y.coerceAtMost(maxY.coerceAtLeast(0))
+            
+            if (newX != item.x || newY != item.y) {
+                updateItemPos(item, newX, newY)
+            } else {
+                item
+            }
+        }
     }
 
     // Default constants used for initial fallback or calculation if needed, 
