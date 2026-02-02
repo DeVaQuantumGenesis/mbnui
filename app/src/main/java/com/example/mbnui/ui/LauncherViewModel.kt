@@ -63,6 +63,9 @@ class LauncherViewModel @Inject constructor(
         _isCustomizing.value = value
     }
 
+    private val GRID_COLS = 4
+    private val GRID_ROWS = 6
+
     fun onDragStart(item: HomeItem, offset: Pair<Float, Float>) {
         // Find app info if it's an app, primarily for icon display
         val appInfo = (item as? HomeApp)?.appInfo ?: (item as? HomeWidgetStack)?.widgets?.firstOrNull()?.let { 
@@ -173,6 +176,56 @@ class LauncherViewModel @Inject constructor(
                  it.copy(sizeX = newX, sizeY = newY)
              } else it
         }
+    }
+
+    // App addition from drawer
+    fun onDragEnd(x: Int, y: Int) {
+        val app = _draggingItem.value ?: return
+        
+        _draggingItem.value = null
+        _dragOffset.value = null
+        
+        // Add to home at first available position
+        val (targetX, targetY) = findFirstEmptySlot() ?: return
+        
+        addAppToHome(app, targetX, targetY)
+    }
+
+    private fun findFirstEmptySlot(): Pair<Int, Int>? {
+        val occupied = _homeItems.value.map { it.x to it.y }.toSet()
+        for (y in 0 until GRID_ROWS) {
+            for (x in 0 until GRID_COLS) {
+                if (!occupied.contains(x to y)) {
+                    return x to y
+                }
+            }
+        }
+        return null // No space
+    }
+
+    private fun addAppToHome(app: AppInfo, x: Int, y: Int) {
+        val newItem = HomeApp(appInfo = app, x = x, y = y)
+        _homeItems.value = _homeItems.value + newItem
+    }
+
+    fun addWidget(appWidgetId: Int, providerName: String, label: String, x: Int, y: Int) {
+        val widget = LauncherWidget(appWidgetId = appWidgetId, providerName = providerName, label = label)
+        val (targetX, targetY) = findFirstEmptySlot() ?: (0 to 0)
+
+        val stack = HomeWidgetStack(widgets = listOf(widget), x = targetX, y = targetY)
+        _homeItems.value = _homeItems.value + stack
+    }
+
+    fun removeItem(item: HomeItem) {
+        _homeItems.value = _homeItems.value.filter { it.id != item.id }
+    }
+    
+    fun uninstallApp(app: AppInfo) {
+        repository.uninstallApp(app)
+    }
+
+    fun openAppInfo(app: AppInfo) {
+        repository.openAppInfo(app)
     }
 
     fun loadApps() {

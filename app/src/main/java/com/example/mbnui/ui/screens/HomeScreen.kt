@@ -58,6 +58,7 @@ import android.provider.Settings
 import androidx.compose.ui.zIndex
 import com.example.mbnui.ui.components.AppItem
 import com.example.mbnui.ui.components.DockItem
+import androidx.compose.ui.res.painterResource
 
 @Composable
 fun HomeScreen(
@@ -67,12 +68,13 @@ fun HomeScreen(
     val apps by viewModel.filteredApps.collectAsState()
     val homeItems by viewModel.homeItems.collectAsState()
     val isCustomizing by viewModel.isCustomizing.collectAsState()
-    val draggingItem by viewModel.draggingItem.collectAsState()
+    val draggingAppInfo by viewModel.draggingItem.collectAsState() // From Drawer
+    val draggingHomeItemId by viewModel.draggingItemId.collectAsState() // From Home
     val dragOffset by viewModel.dragOffset.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
     val screenWidth = configuration.screenWidthDp.dp
@@ -87,7 +89,6 @@ fun HomeScreen(
     )
 
     val drawerOffsetY = animatedProgress * screenHeight.value
-
     var showCustomizationSheet by remember { mutableStateOf(false) }
 
     // Widget Picking
@@ -97,12 +98,10 @@ fun HomeScreen(
         if (result.resultCode == android.app.Activity.RESULT_OK) {
             val appWidgetId = result.data?.extras?.getInt(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID)
             if (appWidgetId != null) {
-                // Get provider info for label
                  val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
                  val appWidgetInfo = appWidgetManager.getAppWidgetInfo(appWidgetId)
                  val label = appWidgetInfo?.loadLabel(context.packageManager) ?: "Widget"
                  val provider = appWidgetInfo?.provider?.className ?: "Unknown"
-
                 viewModel.addWidget(appWidgetId, provider, label, 0, 0)
             }
         }
@@ -124,24 +123,16 @@ fun HomeScreen(
                 detectVerticalDragGestures(
                     onVerticalDrag = { change, dragAmount ->
                         change.consume()
-                        val sensitivity = 1.5f
                         val delta = (dragAmount / density.density) / screenHeight.value
-                        drawerProgress = (drawerProgress + delta * sensitivity).coerceIn(0f, 1f)
+                        drawerProgress = (drawerProgress + delta * 1.5f).coerceIn(0f, 1f)
                     },
                     onDragEnd = {
                         drawerProgress = if (drawerProgress < 0.5f) 0f else 1f
-                        if (drawerProgress == 0f) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        }
                     }
                 )
             }
     ) {
-        // App Drawer (moved to be behind content if we want transparent home, but typically drawer overlays)
-        // Wait, standard launcher has wallpaper.
-        // We removed the Box with Gradient.
-        
-        // Home Screen Content (Workspace)
+        // Workspace Content
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -158,18 +149,16 @@ fun HomeScreen(
                         detectTapGestures(
                             onLongPress = {
                                 try {
-                                    val intent = Intent(Settings.ACTION_HOME_SETTINGS)
-                                    context.startActivity(intent)
+                                    context.startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
                                 } catch (e: Exception) {
-                                    val intent = Intent(Settings.ACTION_SETTINGS)
-                                    context.startActivity(intent)
+                                    context.startActivity(Intent(Settings.ACTION_SETTINGS))
                                 }
                             }
                         )
                     }
             )
             
-            // Grid Workspace
+            // Grid
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -179,21 +168,15 @@ fun HomeScreen(
                 val gridCols = 4
                 val cellWidth = (screenWidth - 32.dp) / gridCols
                 val cellHeight = 110.dp
-                
                 var activeItem by remember { mutableStateOf<HomeItem?>(null) }
-                val draggingItemId by viewModel.draggingItemId.collectAsState()
-                
+
                 homeItems.forEach { item ->
-                    val isBeingDragged = item.id == draggingItemId
-                    
+                    val isBeingDragged = item.id == draggingHomeItemId
                     Box(
                         modifier = Modifier
-                            .offset(
-                                x = cellWidth * item.x,
-                                y = cellHeight * item.y
-                            )
-                            .width(if (item is HomeWidgetStack) cellWidth * 2 else cellWidth)
-                            .height(if (item is HomeWidgetStack) cellHeight * 2 else cellHeight)
+                            .offset(x = cellWidth * item.x, y = cellHeight * item.y)
+                            .width(if (item is HomeWidgetStack) cellWidth * item.sizeX.dp else cellWidth)
+                            .height(if (item is HomeWidgetStack) cellHeight * item.sizeY.dp else cellHeight)
                             .alpha(if (isBeingDragged) 0f else 1f)
                             .pointerInput(item) {
                                 var isDragging = false
@@ -206,129 +189,60 @@ fun HomeScreen(
                                     onDrag = { change, dragAmount ->
                                         change.consume()
                                         isDragging = true
-                                        // Update drag offset (global) - logic needs refinement to accumulate
-                                        // keeping simplified for this step
-                                        val current = dragOffset ?: Pair(0f, 0f)
+                                        val current = viewModel.dragOffset.value ?: Pair(0f, 0f)
                                         viewModel.onDrag(Pair(current.first + dragAmount.x, current.second + dragAmount.y))
                                     },
                                     onDragEnd = {
                                         if (isDragging) {
-                                            // Calculate Drop Grid Position
-                                            val currentDragX = (dragOffset?.first ?: 0f)
-                                            val currentDragY = (dragOffset?.second ?: 0f)
-                                            
-                                            // Approximation of grid relative position
-                                            // Since we track relative movement, we need absolute start position
-                                            // This is tricky without absolute coordinates. 
-                                            // Simplifying: assuming dragOffset is relative to screen for now (needs proper touch tracking)
-                                             
-                                            // Let's assume onDragStart gives relative to Item.
-                                            // We need screen coordinates for accurate drop. 
-                                            // For this prototype, we'll iterate simplistically.
-                                            
-                                            // Better approach:
-                                            // Pass simple mock drop for now as re-implementing full Coordinate system is complex in one go.
-                                            // We will try to map loosely based on item start X/Y + drag amount.
+                                            val currentOffset = viewModel.dragOffset.value ?: Pair(0f, 0f)
                                             val startPxX = (cellWidth * item.x).toPx()
                                             val startPxY = (cellHeight * item.y).toPx()
+                                            val dropPxX = startPxX + currentOffset.first
+                                            val dropPxY = startPxY + currentOffset.second
                                             
-                                            val dropPxX = startPxX + (dragOffset?.first ?: 0f) // This offset logic in VM needs check
-                                            val dropPxY = startPxY + (dragOffset?.second ?: 0f)
-                                            
-                                            val cellW = cellWidth.toPx()
-                                            val cellH = cellHeight.toPx()
-                                            
-                                            val targetX = (dropPxX / cellW).toInt().coerceIn(0, 3)
-                                            val targetY = (dropPxY / cellH).toInt().coerceIn(0, 5)
-                                            
+                                            val targetX = (dropPxX / cellWidth.toPx()).toInt().coerceIn(0, 3)
+                                            val targetY = (dropPxY / cellHeight.toPx()).toInt().coerceIn(0, 5)
                                             viewModel.onItemDrop(item.id, targetX, targetY)
                                         } else {
-                                            // Long press without drag -> Context Menu
                                             activeItem = item
-                                            // Reset drag state in VM
                                             viewModel.onHomeItemDragEnd(0, 0, 0f)
                                         }
                                     },
-                                    onDragCancel = {
-                                        viewModel.onHomeItemDragEnd(0, 0, 0f)
-                                    }
+                                    onDragCancel = { viewModel.onHomeItemDragEnd(0, 0, 0f) }
                                 )
                             }
-                            .pointerInput(item) {
-                                detectTapGestures(
-                                    onTap = {
-                                        if (item is HomeApp) {
-                                            viewModel.launchApp(item.appInfo)
-                                        }
-                                    }
-                                )
+                            .clickable(enabled = draggingHomeItemId == null) {
+                                if (item is HomeApp) viewModel.launchApp(item.appInfo)
                             }
                     ) {
                         when (item) {
-                            is HomeApp -> {
-                                AppItem(
-                                    app = item.appInfo,
-                                    onClick = {} 
-                                )
-                            }
-                            is HomeWidgetStack -> {
-                                WidgetStack(item, appWidgetHost)
-                            }
+                            is HomeApp -> AppItem(app = item.appInfo, onClick = {})
+                            is HomeWidgetStack -> WidgetStack(item, appWidgetHost)
                         }
-                        
-                        // Context Menu (Existing code...)
+
+                        // Context Menu
                         if (activeItem == item) {
                             DropdownMenu(
                                 expanded = true,
                                 onDismissRequest = { activeItem = null },
-                                modifier = Modifier.background(
-                                    Color(0xFF1A1A2E).copy(alpha = 0.95f),
-                                    RoundedCornerShape(12.dp)
-                                ).border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                modifier = Modifier.background(Color(0xFF1A1A2E).copy(alpha = 0.95f), RoundedCornerShape(12.dp))
+                                    .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                             ) {
                                 DropdownMenuItem(
                                     text = { Text("Remove", color = Color.White) },
-                                    onClick = {
-                                        viewModel.removeItem(item)
-                                        activeItem = null
-                                    },
-                                     leadingIcon = {
-                                        Icon(
-                                            painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_delete), 
-                                            contentDescription = null,
-                                            tint = Color.White
-                                        )
-                                    }
+                                    leadingIcon = { Icon(painterResource(android.R.drawable.ic_menu_delete), null, tint = Color.White) },
+                                    onClick = { viewModel.removeItem(item); activeItem = null }
                                 )
-                                // ... (Rest of menu items)
                                 if (item is HomeApp) {
                                     DropdownMenuItem(
                                         text = { Text("App Info", color = Color.White) },
-                                        onClick = {
-                                            viewModel.openAppInfo(item.appInfo)
-                                            activeItem = null
-                                        },
-                                        leadingIcon = {
-                                            Icon(
-                                                painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_info_details), 
-                                                contentDescription = null, 
-                                                tint = Color.White
-                                            )
-                                        }
+                                        leadingIcon = { Icon(painterResource(android.R.drawable.ic_menu_info_details), null, tint = Color.White) },
+                                        onClick = { viewModel.openAppInfo(item.appInfo); activeItem = null }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Uninstall", color = Color.Red.copy(alpha = 0.8f)) },
-                                        onClick = {
-                                            viewModel.uninstallApp(item.appInfo)
-                                            activeItem = null
-                                        },
-                                         leadingIcon = {
-                                            Icon(
-                                                painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_notification_clear_all), 
-                                                contentDescription = null,
-                                                tint = Color.Red.copy(alpha = 0.8f)
-                                            )
-                                        }
+                                        leadingIcon = { Icon(painterResource(android.R.drawable.ic_notification_clear_all), null, tint = Color.Red) },
+                                        onClick = { viewModel.uninstallApp(item.appInfo); activeItem = null }
                                     )
                                 }
                             }
@@ -337,60 +251,13 @@ fun HomeScreen(
                 }
             }
 
-        // Expanded Dragging Overlay handles both AppDrawer Drag and Home Reorder Drag
-        val draggingHomeItemId by viewModel.draggingItemId.collectAsState()
-        val draggingAppInfo by viewModel.draggingItem.collectAsState() // From Drawer
-        
-        if (draggingHomeItemId != null || draggingAppInfo != null) {
+            // Dock
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(100f)
-            ) {
-                 dragOffset?.let { (x, y) ->
-                     // Need better absolute positioning logic here. 
-                     // Using rough offset for visual feedback
-                     Box(
-                         modifier = Modifier
-                            .offset(x = (x).dp, y = (y).dp) // Units need adjustment based on source
-                            .size(64.dp) 
-                     ) {
-                         // Decide what to show
-                         if (draggingAppInfo != null) {
-                             Image(bitmap = draggingAppInfo!!.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
-                         } else if (draggingHomeItemId != null) {
-                             val item = homeItems.find { it.id == draggingHomeItemId }
-                             if (item is HomeApp) {
-                                 Image(bitmap = item.appInfo.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
-                             } else {
-                                 // Widget drag placeholder
-                                 Box(modifier = Modifier.fillMaxSize().background(Color.White.copy(0.5f)))
-                             }
-                         }
-                     }
-                 }
-            }
-        }
-
-            // Stationary Dock
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 48.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
-                GlassBox(
-                    modifier = Modifier
-                        .width(320.dp)
-                        .height(96.dp),
-                    cornerRadius = 28.dp,
-                    isDark = true
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                GlassBox(modifier = Modifier.width(320.dp).height(96.dp), cornerRadius = 28.dp, isDark = true) {
+                    Row(modifier = Modifier.fillMaxSize(), Arrangement.SpaceEvenly, Alignment.CenterVertically) {
                         apps.take(4).forEach { app ->
                             DockItem(app) {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -411,43 +278,34 @@ fun HomeScreen(
                 val delta = (dragAmount / density.density) / screenHeight.value
                 drawerProgress = (drawerProgress + delta * 1.5f).coerceIn(0f, 1f)
             },
-            onAppClick = { app ->
-                 viewModel.launchApp(app)
-                 drawerProgress = 1f
-            },
+            onAppClick = { app -> viewModel.launchApp(app); drawerProgress = 1f },
             onAppDragStart = { app, offset ->
-                 viewModel.onDragStart(app, Pair(offset.x, offset.y))
-                 // Close drawer when drag starts, or handle visually
+                 viewModel.onDragStart(HomeApp(app, 0, 0), Pair(offset.x, offset.y)) // Dummy HomeApp for reuse
                  drawerProgress = 1f 
             },
-            onAppDrag = { offset ->
-                viewModel.onDrag(Pair(offset.x, offset.y))
-            },
-            onAppDragEnd = {
-                // Determine drop position based on current drag offset
-                // Simplified: default to 0,0 or find empty slot
-                viewModel.onDragEnd(0, 0) 
-            },
+            onAppDrag = { offset -> viewModel.onDrag(Pair(offset.x, offset.y)) },
+            onAppDragEnd = { viewModel.onDragEnd(0, 0) },
             searchQuery = searchQuery,
             onSearchQueryChange = { viewModel.onSearchQueryChange(it) }
         )
 
-        // Dragging Overlay
-        if (draggingItem != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(100f)
-            ) {
+        // Unified Drag Overlay
+        if (draggingHomeItemId != null || draggingAppInfo != null) {
+            Box(modifier = Modifier.fillMaxSize().zIndex(100f)) {
                  dragOffset?.let { (x, y) ->
-                     // This is simplified. Real implementation needs proper coordinate mapping
-                     // from touch screen to local coordinates
+                     val item = if (draggingHomeItemId != null) homeItems.find { it.id == draggingHomeItemId } else null
                      Box(
                          modifier = Modifier
-                            .offset(x = x.dp / density.density , y = y.dp / density.density) // Very rough approximation
-                            .size(64.dp)
+                            .offset(x = (x / density.density).dp, y = (y / density.density).dp)
+                            .size(64.dp) 
                      ) {
-                         Image(bitmap = draggingItem!!.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
+                         if (draggingAppInfo != null) {
+                             Image(bitmap = draggingAppInfo!!.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
+                         } else if (item is HomeApp) {
+                             Image(bitmap = item.appInfo.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
+                         } else if (item is HomeWidgetStack) {
+                             Box(modifier = Modifier.fillMaxSize().background(Color.White.copy(0.5f), RoundedCornerShape(12.dp)))
+                         }
                      }
                  }
             }
@@ -457,12 +315,9 @@ fun HomeScreen(
             CustomizationSheet(
                 onDismiss = { showCustomizationSheet = false },
                 onAddWidget = { 
-                    // Launch system widget picker
                     val appWidgetId = appWidgetHost.allocateAppWidgetId()
                     val pickIntent = Intent(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
                         putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                        putParcelableArrayListExtra(android.appwidget.AppWidgetManager.EXTRA_CUSTOM_INFO, ArrayList())
-                        putParcelableArrayListExtra(android.appwidget.AppWidgetManager.EXTRA_CUSTOM_EXTRAS, ArrayList())
                     }
                     widgetPickerLauncher.launch(pickIntent)
                     showCustomizationSheet = false
@@ -493,23 +348,12 @@ fun WidgetStack(
     val context = LocalContext.current
     
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(8.dp)
+        modifier = Modifier.fillMaxSize().padding(8.dp)
             .pointerInput(Unit) {
-                // Simplified gesture detection that might conflict less, or handled by parent
-                // For now, we keep it simple for stack swiping. 
-                // In a real launcher, we'd need complex touch event handling (intercepting touch)
                 detectVerticalDragGestures { change, dragAmount ->
-                    // change.consume() // Do NOT consume if we want parent to see it? 
-                    // Actually, standard widgets consume touch. 
-                    // We only want vertical swipes for stack.
                     change.consume()
-                    if (dragAmount > 20) {
-                        currentIndex = (currentIndex + 1) % stack.widgets.size
-                    } else if (dragAmount < -20) {
-                        currentIndex = (currentIndex - 1 + stack.widgets.size) % stack.widgets.size
-                    }
+                    if (dragAmount > 20) currentIndex = (currentIndex + 1) % stack.widgets.size
+                    else if (dragAmount < -20) currentIndex = (currentIndex - 1 + stack.widgets.size) % stack.widgets.size
                 }
             }
     ) {
@@ -522,19 +366,13 @@ fun WidgetStack(
             if (appWidgetInfo != null) {
                 AndroidView(
                     factory = { ctx ->
-                        appWidgetHost.createView(ctx, currentWidget.appWidgetId, appWidgetInfo).apply {
-                            setPadding(0, 0, 0, 0)
-                        }
+                        appWidgetHost.createView(ctx, currentWidget.appWidgetId, appWidgetInfo).apply { setPadding(0, 0, 0, 0) }
                     },
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
-                 GlassBox(
-                    modifier = Modifier.fillMaxSize(),
-                    cornerRadius = 24.dp,
-                    isDark = true
-                ) {
-                    Text("Widget Error", color = Color.White)
+                 GlassBox(modifier = Modifier.fillMaxSize(), cornerRadius = 24.dp, isDark = true) {
+                    Text("Widget Error", color = Color.White, modifier = Modifier.align(Alignment.Center))
                 }
             }
         }
@@ -550,42 +388,23 @@ fun CustomizationSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF1A1A2E),
-        dragHandle = {
-            BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.3f))
-        }
+        dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.3f)) }
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp)
-        ) {
-            Text(
-                "Customize Home",
-                fontSize = 20.sp,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                color = Color.White
-            )
+        Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+            Text("Customize Home", fontSize = 20.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Color.White)
             Spacer(modifier = Modifier.height(24.dp))
             
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                modifier = Modifier.fillMaxWidth().height(64.dp).background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
                     .clickable { onAddWidget() },
                 contentAlignment = Alignment.Center
             ) {
                  Row(verticalAlignment = Alignment.CenterVertically) {
-                     Icon(
-                         painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_add),
-                         contentDescription = null,
-                         tint = Color.White
-                     )
+                     Icon(painterResource(android.R.drawable.ic_menu_add), null, tint = Color.White)
                      Spacer(modifier = Modifier.width(8.dp))
                      Text("Add System Widget", color = Color.White, fontSize = 16.sp)
                  }
             }
-            
             Spacer(modifier = Modifier.height(48.dp))
         }
     }
