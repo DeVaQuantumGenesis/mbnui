@@ -45,6 +45,9 @@ class LauncherViewModel @Inject constructor(
     // Drag and Drop state
     private val _draggingItem = MutableStateFlow<AppInfo?>(null)
     val draggingItem: StateFlow<AppInfo?> = _draggingItem.asStateFlow()
+    
+    private val _dragOffset = MutableStateFlow<Pair<Float, Float>?>(null)
+    val dragOffset: StateFlow<Pair<Float, Float>?> = _dragOffset.asStateFlow()
 
     private val _isCustomizing = MutableStateFlow(false)
     val isCustomizing: StateFlow<Boolean> = _isCustomizing.asStateFlow()
@@ -61,13 +64,21 @@ class LauncherViewModel @Inject constructor(
         _isCustomizing.value = value
     }
 
-    fun onDragStart(app: AppInfo) {
+    fun onDragStart(app: AppInfo, offset: Pair<Float, Float>) {
         _draggingItem.value = app
+        _dragOffset.value = offset
+    }
+    
+    fun onDrag(offset: Pair<Float, Float>) {
+        _dragOffset.value = offset
     }
 
     fun onDragEnd(x: Int, y: Int) {
         val app = _draggingItem.value ?: return
+        val currentOffset = _dragOffset.value ?: return
+        
         _draggingItem.value = null
+        _dragOffset.value = null
         
         // Add to home at position
         addAppToHome(app, x, y)
@@ -78,8 +89,8 @@ class LauncherViewModel @Inject constructor(
         _homeItems.value = _homeItems.value + newItem
     }
 
-    fun addWidget(type: WidgetType, x: Int, y: Int) {
-        val widget = LauncherWidget(type = type, label = type.name)
+    fun addWidget(appWidgetId: Int, providerName: String, label: String, x: Int, y: Int) {
+        val widget = LauncherWidget(appWidgetId = appWidgetId, providerName = providerName, label = label)
         val stack = HomeWidgetStack(widgets = listOf(widget), x = x, y = y)
         _homeItems.value = _homeItems.value + stack
     }

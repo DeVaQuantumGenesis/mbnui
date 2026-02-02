@@ -4,6 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -31,6 +32,9 @@ fun AppDrawer(
     onClose: () -> Unit,
     onDrag: (Float) -> Unit,
     onAppClick: (AppInfo) -> Unit,
+    onAppDragStart: (AppInfo, androidx.compose.ui.geometry.Offset) -> Unit,
+    onAppDrag: (androidx.compose.ui.geometry.Offset) -> Unit,
+    onAppDragEnd: () -> Unit,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -97,8 +101,33 @@ fun AppDrawer(
                         items = apps,
                         key = { it.key }
                     ) { app ->
-                        AppItem(app) {
-                            onAppClick(app)
+                        var isDragging by remember { mutableStateOf(false) }
+                        
+                        Box(
+                            modifier = Modifier.pointerInput(Unit) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = { offset ->
+                                        isDragging = true
+                                        onAppDragStart(app, offset)
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        onAppDrag(change.position)
+                                    },
+                                    onDragEnd = {
+                                        isDragging = false
+                                        onAppDragEnd()
+                                    },
+                                    onDragCancel = {
+                                        isDragging = false
+                                        onAppDragEnd()
+                                    }
+                                )
+                            }
+                        ) {
+                            AppItem(app) {
+                                onAppClick(app)
+                            }
                         }
                     }
                 }

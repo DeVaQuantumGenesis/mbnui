@@ -32,10 +32,7 @@ data class HomeWidgetStack(
 @Immutable
 data class LauncherWidget(
     val id: String = UUID.randomUUID().toString(),
-    val type: WidgetType,
+    val appWidgetId: Int,
+    val providerName: String,
     val label: String
 )
-
-enum class WidgetType {
-    CLOCK, CALENDAR, WEATHER, STORAGE
-}

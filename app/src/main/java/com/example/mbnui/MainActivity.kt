@@ -22,8 +22,15 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    
+    private var appWidgetHost: android.appwidget.AppWidgetHost? = null
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize AppWidgetHost ID: 1024 is a random host ID
+        appWidgetHost = android.appwidget.AppWidgetHost(applicationContext, 1024)
+        
         enableEdgeToEdge()
         setContent {
             MbnuiTheme {
@@ -33,10 +40,22 @@ class MainActivity : ComponentActivity() {
                     contentWindowInsets = WindowInsets(0, 0, 0, 0)
                 ) { innerPadding ->
                     Box(modifier = Modifier.fillMaxSize()) {
-                        HomeScreen()
+                        appWidgetHost?.let {
+                            HomeScreen(appWidgetHost = it)
+                        }
                     }
                 }
             }
         }
+    }
+    
+    override fun onStart() {
+        super.onStart()
+        appWidgetHost?.startListening()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        appWidgetHost?.stopListening()
     }
 }

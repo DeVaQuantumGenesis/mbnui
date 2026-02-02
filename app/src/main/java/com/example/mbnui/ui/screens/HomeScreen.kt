@@ -57,12 +57,14 @@ import com.example.mbnui.ui.components.DockItem
 
 @Composable
 fun HomeScreen(
-    viewModel: LauncherViewModel = viewModel()
+    viewModel: LauncherViewModel = viewModel(),
+    appWidgetHost: android.appwidget.AppWidgetHost
 ) {
     val apps by viewModel.filteredApps.collectAsState()
     val homeItems by viewModel.homeItems.collectAsState()
     val isCustomizing by viewModel.isCustomizing.collectAsState()
     val draggingItem by viewModel.draggingItem.collectAsState()
+    val dragOffset by viewModel.dragOffset.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -73,7 +75,7 @@ fun HomeScreen(
     val density = LocalDensity.current
 
     // Drawer state
-    var drawerProgress by remember { mutableStateOf(1f) }
+    var drawerProgress by remember { mutableFloatStateOf(1f) }
     val animatedProgress by animateFloatAsState(
         targetValue = drawerProgress,
         animationSpec = spring(stiffness = Spring.StiffnessLow),
@@ -83,6 +85,24 @@ fun HomeScreen(
     val drawerOffsetY = animatedProgress * screenHeight.value
 
     var showCustomizationSheet by remember { mutableStateOf(false) }
+
+    // Widget Picking
+    val widgetPickerLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val appWidgetId = result.data?.extras?.getInt(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID)
+            if (appWidgetId != null) {
+                // Get provider info for label
+                 val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
+                 val appWidgetInfo = appWidgetManager.getAppWidgetInfo(appWidgetId)
+                 val label = appWidgetInfo?.loadLabel(context.packageManager) ?: "Widget"
+                 val provider = appWidgetInfo?.provider?.className ?: "Unknown"
+
+                viewModel.addWidget(appWidgetId, provider, label, 0, 0)
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -184,7 +204,7 @@ fun HomeScreen(
                                 }
                             }
                             is HomeWidgetStack -> {
-                                WidgetStack(item)
+                                WidgetStack(item, appWidgetHost)
                             }
                         }
                     }
@@ -231,36 +251,59 @@ fun HomeScreen(
                 drawerProgress = (drawerProgress + delta * 1.5f).coerceIn(0f, 1f)
             },
             onAppClick = { app ->
-                if (isCustomizing) {
-                    // In customizing mode, clicking in drawer adds to home
-                    viewModel.onDragStart(app)
-                    viewModel.onDragEnd(0, 0) // Simplified: add to first available or 0,0
-                } else {
-                    viewModel.launchApp(app)
-                }
-                drawerProgress = 1f
+                 viewModel.launchApp(app)
+                 drawerProgress = 1f
+            },
+            onAppDragStart = { app, offset ->
+                 viewModel.onDragStart(app, Pair(offset.x, offset.y))
+                 // Close drawer when drag starts, or handle visually
+                 drawerProgress = 1f 
+            },
+            onAppDrag = { offset ->
+                viewModel.onDrag(Pair(offset.x, offset.y))
+            },
+            onAppDragEnd = {
+                // Determine drop position based on current drag offset
+                // Simplified: default to 0,0 or find empty slot
+                viewModel.onDragEnd(0, 0) 
             },
             searchQuery = searchQuery,
             onSearchQueryChange = { viewModel.onSearchQueryChange(it) }
         )
 
-        // Dragging Overlay (Simplified)
-        draggingItem?.let {
+        // Dragging Overlay
+        if (draggingItem != null) {
             Box(
                 modifier = Modifier
-                    .size(64.dp)
-                    .align(Alignment.Center)
+                    .fillMaxSize()
                     .zIndex(100f)
             ) {
-                Image(bitmap = it.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
+                 dragOffset?.let { (x, y) ->
+                     // This is simplified. Real implementation needs proper coordinate mapping
+                     // from touch screen to local coordinates
+                     Box(
+                         modifier = Modifier
+                            .offset(x = x.dp / density.density , y = y.dp / density.density) // Very rough approximation
+                            .size(64.dp)
+                     ) {
+                         Image(bitmap = draggingItem!!.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
+                     }
+                 }
             }
         }
 
         if (showCustomizationSheet) {
             CustomizationSheet(
                 onDismiss = { showCustomizationSheet = false },
-                onAddWidget = { type ->
-                    viewModel.addWidget(type, 0, 0)
+                onAddWidget = { 
+                    // Launch system widget picker
+                    val appWidgetId = appWidgetHost.allocateAppWidgetId()
+                    val pickIntent = Intent(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
+                        putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                        putParcelableArrayListExtra(android.appwidget.AppWidgetManager.EXTRA_CUSTOM_INFO, ArrayList())
+                        putParcelableArrayListExtra(android.appwidget.AppWidgetManager.EXTRA_CUSTOM_EXTRAS, ArrayList())
+                    }
+                    widgetPickerLauncher.launch(pickIntent)
                     showCustomizationSheet = false
                 }
             )
@@ -281,8 +324,12 @@ fun HomeScreen(
 }
 
 @Composable
-fun WidgetStack(stack: HomeWidgetStack) {
+fun WidgetStack(
+    stack: HomeWidgetStack,
+    appWidgetHost: android.appwidget.AppWidgetHost
+) {
     var currentIndex by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
     
     Box(
         modifier = Modifier
@@ -299,28 +346,29 @@ fun WidgetStack(stack: HomeWidgetStack) {
                 }
             }
     ) {
-        GlassBox(
-            modifier = Modifier.fillMaxSize(),
-            cornerRadius = 24.dp,
-            isDark = true
-        ) {
-            val currentWidget = stack.widgets[currentIndex]
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = currentWidget.type.name,
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+        val currentWidget = stack.widgets.getOrNull(currentIndex)
+        
+        if (currentWidget != null) {
+            val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
+            val appWidgetInfo = appWidgetManager.getAppWidgetInfo(currentWidget.appWidgetId)
+            
+            if (appWidgetInfo != null) {
+                AndroidView(
+                    factory = { ctx ->
+                        appWidgetHost.createView(ctx, currentWidget.appWidgetId, appWidgetInfo).apply {
+                            setPadding(0, 0, 0, 0)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
                 )
-                Text(
-                    text = "Widget",
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 14.sp
-                )
+            } else {
+                 GlassBox(
+                    modifier = Modifier.fillMaxSize(),
+                    cornerRadius = 24.dp,
+                    isDark = true
+                ) {
+                    Text("Widget Error", color = Color.White)
+                }
             }
         }
     }
@@ -330,7 +378,7 @@ fun WidgetStack(stack: HomeWidgetStack) {
 @Composable
 fun CustomizationSheet(
     onDismiss: () -> Unit,
-    onAddWidget: (WidgetType) -> Unit
+    onAddWidget: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -352,32 +400,25 @@ fun CustomizationSheet(
             )
             Spacer(modifier = Modifier.height(24.dp))
             
-            Text("Add Widgets", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                    .clickable { onAddWidget() },
+                contentAlignment = Alignment.Center
             ) {
-                WidgetType.values().forEach { type ->
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { onAddWidget(type) },
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        GlassBox(
-                            modifier = Modifier.aspectRatio(1f),
-                            cornerRadius = 16.dp,
-                            isDark = true
-                        ) {
-                            Text(type.name.take(1), fontSize = 24.sp, color = Color.White)
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(type.name.lowercase().capitalize(), fontSize = 12.sp, color = Color.White)
-                    }
-                }
+                 Row(verticalAlignment = Alignment.CenterVertically) {
+                     Icon(
+                         painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_add),
+                         contentDescription = null,
+                         tint = Color.White
+                     )
+                     Spacer(modifier = Modifier.width(8.dp))
+                     Text("Add System Widget", color = Color.White, fontSize = 16.sp)
+                 }
             }
+            
             Spacer(modifier = Modifier.height(48.dp))
         }
     }
