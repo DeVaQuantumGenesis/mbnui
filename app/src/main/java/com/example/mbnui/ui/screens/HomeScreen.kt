@@ -59,6 +59,7 @@ import androidx.compose.ui.zIndex
 import com.example.mbnui.ui.components.AppItem
 import com.example.mbnui.ui.components.DockItem
 import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 
 @Composable
 fun HomeScreen(
@@ -175,8 +176,8 @@ fun HomeScreen(
                     Box(
                         modifier = Modifier
                             .offset(x = cellWidth * item.x, y = cellHeight * item.y)
-                            .width(if (item is HomeWidgetStack) cellWidth * item.sizeX.dp else cellWidth)
-                            .height(if (item is HomeWidgetStack) cellHeight * item.sizeY.dp else cellHeight)
+                            .width(if (item is HomeWidgetStack) cellWidth * item.sizeX else cellWidth)
+                            .height(if (item is HomeWidgetStack) cellHeight * item.sizeY else cellHeight)
                             .alpha(if (isBeingDragged) 0f else 1f)
                             .pointerInput(item) {
                                 var isDragging = false
@@ -280,7 +281,7 @@ fun HomeScreen(
             },
             onAppClick = { app -> viewModel.launchApp(app); drawerProgress = 1f },
             onAppDragStart = { app, offset ->
-                 viewModel.onDragStart(HomeApp(app, 0, 0), Pair(offset.x, offset.y)) // Dummy HomeApp for reuse
+                 viewModel.onDragStart(HomeApp(appInfo = app, x = 0, y = 0), Pair(offset.x, offset.y)) // Dummy HomeApp for reuse
                  drawerProgress = 1f 
             },
             onAppDrag = { offset -> viewModel.onDrag(Pair(offset.x, offset.y)) },
