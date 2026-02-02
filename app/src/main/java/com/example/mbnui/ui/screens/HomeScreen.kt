@@ -28,16 +28,25 @@ import com.example.mbnui.ui.components.GlassSearchBar
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
+import com.example.mbnui.ui.components.DockItem
+import androidx.compose.foundation.gestures.detectTapGestures
+import android.content.Intent
+import android.provider.Settings
 
 @Composable
 fun HomeScreen(
@@ -47,8 +56,41 @@ fun HomeScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+    val density = LocalDensity.current
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // Drawer state
+    var drawerProgress by remember { mutableStateOf(1f) } // 1f = closed, 0f = opened
+    val animatedProgress by animateFloatAsState(
+        targetValue = drawerProgress,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "drawer_animation"
+    )
+
+    val drawerOffsetY = animatedProgress * screenHeight.value
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onVerticalDrag = { change, dragAmount ->
+                        change.consume()
+                        val sensitivity = 1.5f
+                        val delta = (dragAmount / density.density) / screenHeight.value
+                        drawerProgress = (drawerProgress + delta * sensitivity).coerceIn(0f, 1f)
+                    },
+                    onDragEnd = {
+                        drawerProgress = if (drawerProgress < 0.5f) 0f else 1f
+                        if (drawerProgress == 0f) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                    }
+                )
+            }
+    ) {
         // Aesthetic Background Gradient
         Box(
             modifier = Modifier
@@ -64,156 +106,96 @@ fun HomeScreen(
                 )
         )
         
+        // Home Screen Content (Workspace)
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
+                .alpha(1f - (1f - animatedProgress) * 0.8f) // Fade out when drawer opens
+                .scale(1f - (1f - animatedProgress) * 0.05f) // Slight shrink
         ) {
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(64.dp))
             
             GlassClock(
-                modifier = Modifier.padding(horizontal = 24.dp)
-            )
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            GlassSearchBar(
-                query = searchQuery,
-                onQueryChange = { viewModel.onSearchQueryChange(it) },
-                modifier = Modifier.padding(horizontal = 24.dp)
-            )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
-                modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(bottom = 120.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(
-                    items = apps,
-                    key = { it.key }
-                ) { app ->
-                    AppItem(app) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        app.launchIntent?.let { intent ->
-                            context.startActivity(intent)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Stationary Dock
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp)
-        ) {
-            GlassBox(
                 modifier = Modifier
-                    .width(300.dp)
-                    .height(84.dp),
-                cornerRadius = 24.dp,
-                isDark = true
+                    .padding(horizontal = 24.dp)
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onLongPress = {
+                                try {
+                                    val intent = Intent(Settings.ACTION_HOME_SETTINGS)
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // Fallback if ACTION_HOME_SETTINGS is not available
+                                    val intent = Intent(Settings.ACTION_SETTINGS)
+                                    context.startActivity(intent)
+                                }
+                            }
+                        )
+                    }
+            )
+            
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Stationary Dock at the bottom of the workspace
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 48.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+                GlassBox(
+                    modifier = Modifier
+                        .width(320.dp)
+                        .height(96.dp),
+                    cornerRadius = 28.dp,
+                    isDark = true
                 ) {
-                    // Placeholder for pinned apps in the dock
-                    val dockApps = apps.take(4)
-                    dockApps.forEach { app ->
-                        DockItem(app) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            app.launchIntent?.let { intent ->
-                                context.startActivity(intent)
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Show first 4 apps as docked apps
+                        val dockApps = apps.take(4)
+                        dockApps.forEach { app ->
+                            DockItem(app) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                app.launchIntent?.let { intent ->
+                                    context.startActivity(intent)
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
-}
 
-@Composable
-fun AppItem(
-    app: AppInfo,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
-        label = "scale"
-    )
+        // App Drawer (Overlays the Home Screen)
+        AppDrawer(
+            apps = apps,
+            offsetY = drawerOffsetY,
+            onClose = { 
+                drawerProgress = if (drawerProgress < 0.5f) 0f else 1f 
+            },
+            onDrag = { dragAmount ->
+                val delta = (dragAmount / density.density) / screenHeight.value
+                drawerProgress = (drawerProgress + delta * 1.5f).coerceIn(0f, 1f)
+            },
+            searchQuery = searchQuery,
+            onSearchQueryChange = { viewModel.onSearchQueryChange(it) }
+        )
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        GlassBox(
-            modifier = Modifier.size(64.dp),
-            cornerRadius = 16.dp
-        ) {
-            Image(
-                bitmap = app.icon,
-                contentDescription = app.name,
-                modifier = Modifier.fillMaxSize().padding(8.dp)
+        // Swipe Indicator
+        if (drawerProgress > 0.9f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 12.dp)
+                    .width(40.dp)
+                    .height(4.dp)
+                    .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(2.dp))
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = app.name,
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            color = Color.White,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
-    }
-}
-
-@Composable
-fun DockItem(
-    app: AppInfo,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.85f else 1f,
-        label = "dock_scale"
-    )
-
-    Box(
-        modifier = Modifier
-            .size(56.dp)
-            .scale(scale)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Image(
-            bitmap = app.icon,
-            contentDescription = app.name,
-            modifier = Modifier.fillMaxSize().padding(4.dp)
-        )
     }
 }
