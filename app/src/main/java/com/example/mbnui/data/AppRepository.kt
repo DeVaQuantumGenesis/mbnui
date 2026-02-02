@@ -79,4 +79,9 @@ class AppRepository @Inject constructor(
         }
         context.startActivity(intent)
     }
+
+    fun getWidgetProviders(): List<android.appwidget.AppWidgetProviderInfo> {
+        val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
+        return appWidgetManager.installedProviders
+    }
 }

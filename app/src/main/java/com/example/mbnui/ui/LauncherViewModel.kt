@@ -37,6 +37,9 @@ class LauncherViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val _widgetProviders = MutableStateFlow<List<android.appwidget.AppWidgetProviderInfo>>(emptyList())
+    val widgetProviders: StateFlow<List<android.appwidget.AppWidgetProviderInfo>> = _widgetProviders.asStateFlow()
+
     // Home items (Grid 4x6)
     private val _homeItems = MutableStateFlow<List<HomeItem>>(emptyList())
     val homeItems: StateFlow<List<HomeItem>> = _homeItems.asStateFlow()
@@ -53,6 +56,7 @@ class LauncherViewModel @Inject constructor(
 
     init {
         loadApps()
+        loadWidgets()
     }
 
     fun onSearchQueryChange(query: String) {
@@ -63,8 +67,20 @@ class LauncherViewModel @Inject constructor(
         _isCustomizing.value = value
     }
 
-    private val GRID_COLS = 4
-    private val GRID_ROWS = 6
+    private val _gridCols = MutableStateFlow(4)
+    val gridCols: StateFlow<Int> = _gridCols.asStateFlow()
+
+    private val _gridRows = MutableStateFlow(6)
+    val gridRows: StateFlow<Int> = _gridRows.asStateFlow()
+
+    fun setGridSize(cols: Int, rows: Int) {
+        _gridCols.value = cols
+        _gridRows.value = rows
+    }
+
+    // Default constants used for initial fallback or calculation if needed, 
+    // but UI should observe flows.
+
 
     fun onDragStart(item: HomeItem, offset: Pair<Float, Float>) {
         // Find app info if it's an app, primarily for icon display
@@ -111,7 +127,9 @@ class LauncherViewModel @Inject constructor(
     // New method called by UI with Grid coordinates
     fun onItemDrop(itemId: String, targetX: Int, targetY: Int) {
         // Check bounds
-        if (targetX < 0 || targetX >= GRID_COLS || targetY < 0 || targetY >= GRID_ROWS) return
+    fun onItemDrop(itemId: String, targetX: Int, targetY: Int) {
+        // Check bounds
+        if (targetX < 0 || targetX >= _gridCols.value || targetY < 0 || targetY >= _gridRows.value) return
         
         val item = _homeItems.value.find { it.id == itemId } ?: return
         val width = if (item is HomeWidgetStack) item.sizeX else 1
@@ -193,8 +211,10 @@ class LauncherViewModel @Inject constructor(
 
     private fun findFirstEmptySlot(): Pair<Int, Int>? {
         val occupied = _homeItems.value.map { it.x to it.y }.toSet()
-        for (y in 0 until GRID_ROWS) {
-            for (x in 0 until GRID_COLS) {
+        val rows = _gridRows.value
+        val cols = _gridCols.value
+        for (y in 0 until rows) {
+            for (x in 0 until cols) {
                 if (!occupied.contains(x to y)) {
                     return x to y
                 }
@@ -230,7 +250,35 @@ class LauncherViewModel @Inject constructor(
 
     fun loadApps() {
         viewModelScope.launch {
-            _apps.value = repository.getInstalledApps()
+            val installed = repository.getInstalledApps()
+            // Only update if empty to preserve order (if we were persisting, we'd load persistence here)
+            // For now, always load but try to keep generic sort or just load once
+             if (_apps.value.isEmpty()) {
+                 _apps.value = installed
+             } else {
+                 // Update list but try to keep existing items? simpler to just reload for now
+                 // Ideally we reconcile. For this task, we just set it.
+                 // If the user expects persistence across reboots, we need DB.
+                 // For "session" persistence of order:
+                 val currentMap = _apps.value.associateBy { it.key }
+                 val newApps = installed.map { currentMap[it.key] ?: it }
+                 _apps.value = newApps
+             }
+        }
+    }
+
+    fun loadWidgets() {
+        viewModelScope.launch {
+            _widgetProviders.value = repository.getWidgetProviders()
+        }
+    }
+
+    fun onAppDrawerReorder(fromIndex: Int, toIndex: Int) {
+        val currentList = _apps.value.toMutableList()
+        if (fromIndex in currentList.indices && toIndex in currentList.indices) {
+            val item = currentList.removeAt(fromIndex)
+            currentList.add(toIndex, item)
+            _apps.value = currentList
         }
     }
 

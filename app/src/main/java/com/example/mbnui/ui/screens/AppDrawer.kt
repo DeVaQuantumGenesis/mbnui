@@ -37,6 +37,7 @@ fun AppDrawer(
     onAppDragEnd: () -> Unit,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
+    onAppReorder: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current

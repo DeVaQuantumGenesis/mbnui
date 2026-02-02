@@ -44,11 +44,21 @@ fun AppItem(
             ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Image(
-            bitmap = app.icon,
-            contentDescription = app.name,
-            modifier = Modifier.size(60.dp).padding(4.dp)
-        )
+        // Squircle Icon
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .size(60.dp)
+                .padding(4.dp)
+                .background(Color.White, androidx.compose.foundation.shape.RoundedCornerShape(22.dp))
+                .androidx.compose.ui.draw.clip(androidx.compose.foundation.shape.RoundedCornerShape(22.dp))
+        ) {
+             Image(
+                bitmap = app.icon,
+                contentDescription = app.name,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = app.name,
