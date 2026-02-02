@@ -15,7 +15,6 @@ import com.example.mbnui.data.HomeApp
 import com.example.mbnui.data.HomeItem
 import com.example.mbnui.data.HomeWidgetStack
 import com.example.mbnui.data.LauncherWidget
-import com.example.mbnui.data.WidgetType
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
@@ -73,15 +72,31 @@ class LauncherViewModel @Inject constructor(
         _dragOffset.value = offset
     }
 
+    private val GRID_COLS = 4
+    private val GRID_ROWS = 6
+
     fun onDragEnd(x: Int, y: Int) {
         val app = _draggingItem.value ?: return
-        val currentOffset = _dragOffset.value ?: return
         
         _draggingItem.value = null
         _dragOffset.value = null
         
-        // Add to home at position
-        addAppToHome(app, x, y)
+        // Add to home at first available position
+        val (targetX, targetY) = findFirstEmptySlot() ?: return
+        
+        addAppToHome(app, targetX, targetY)
+    }
+
+    private fun findFirstEmptySlot(): Pair<Int, Int>? {
+        val occupied = _homeItems.value.map { it.x to it.y }.toSet()
+        for (y in 0 until GRID_ROWS) {
+            for (x in 0 until GRID_COLS) {
+                if (!occupied.contains(x to y)) {
+                    return x to y
+                }
+            }
+        }
+        return null // No space
     }
 
     private fun addAppToHome(app: AppInfo, x: Int, y: Int) {
@@ -91,14 +106,31 @@ class LauncherViewModel @Inject constructor(
 
     fun addWidget(appWidgetId: Int, providerName: String, label: String, x: Int, y: Int) {
         val widget = LauncherWidget(appWidgetId = appWidgetId, providerName = providerName, label = label)
-        val stack = HomeWidgetStack(widgets = listOf(widget), x = x, y = y)
+        // Find empty slot for widget - assume 2x2
+        // Simplified: just put it at 0,0 or next available
+        val (targetX, targetY) = findFirstEmptySlot() ?: (0 to 0)
+
+        val stack = HomeWidgetStack(widgets = listOf(widget), x = targetX, y = targetY)
         _homeItems.value = _homeItems.value + stack
+    }
+
+    fun removeItem(item: HomeItem) {
+        _homeItems.value = _homeItems.value.filter { it.id != item.id }
+    }
+    
+    fun uninstallApp(app: AppInfo) {
+        repository.uninstallApp(app)
+        // Note: The app list update is handled by simple reload or observing package changes,
+        // but for now we rely on explicit reload or system broadcast (not implemented here)
+    }
+
+    fun openAppInfo(app: AppInfo) {
+        repository.openAppInfo(app)
     }
 
     fun moveItem(itemId: String, x: Int, y: Int) {
         _homeItems.value = _homeItems.value.map {
             if (it.id == itemId) {
-                // Return updated item (this is simplified, needs to handle type specifically)
                 when(it) {
                     is HomeApp -> it.copy(x = x, y = y)
                     is HomeWidgetStack -> it.copy(x = x, y = y)

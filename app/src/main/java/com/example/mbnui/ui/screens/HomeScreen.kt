@@ -46,8 +46,12 @@ import androidx.compose.runtime.*
 import com.example.mbnui.data.HomeApp
 import com.example.mbnui.data.HomeItem
 import com.example.mbnui.data.HomeWidgetStack
-import com.example.mbnui.data.WidgetType
 import androidx.compose.material3.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.ui.viewinterop.AndroidView
+import java.util.ArrayList
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import android.content.Intent
 import android.provider.Settings
@@ -187,6 +191,10 @@ fun HomeScreen(
                 val cellWidth = (screenWidth - 32.dp) / gridCols
                 val cellHeight = 110.dp
 
+                // Context Menu State
+                var activeItem by remember { mutableStateOf<HomeItem?>(null) }
+                var menuOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+
                 homeItems.forEach { item ->
                     Box(
                         modifier = Modifier
@@ -196,15 +204,88 @@ fun HomeScreen(
                             )
                             .width(if (item is HomeWidgetStack) cellWidth * 2 else cellWidth)
                             .height(if (item is HomeWidgetStack) cellHeight * 2 else cellHeight)
+                            .pointerInput(item) {
+                                detectTapGestures(
+                                    onLongPress = { offset ->
+                                        activeItem = item
+                                        menuOffset = offset
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    },
+                                    onTap = {
+                                        if (item is HomeApp) {
+                                            viewModel.launchApp(item.appInfo)
+                                        }
+                                    }
+                                )
+                            }
                     ) {
                         when (item) {
                             is HomeApp -> {
-                                AppItem(item.appInfo) {
-                                    viewModel.launchApp(item.appInfo)
-                                }
+                                // We handle click/long press in parent Box now
+                                AppItem(
+                                    app = item.appInfo,
+                                    onClick = {} // No-op, handled by parent
+                                )
                             }
                             is HomeWidgetStack -> {
                                 WidgetStack(item, appWidgetHost)
+                            }
+                        }
+                        
+                        // Context Menu
+                        if (activeItem == item) {
+                            DropdownMenu(
+                                expanded = true,
+                                onDismissRequest = { activeItem = null },
+                                modifier = Modifier.background(
+                                    Color(0xFF1A1A2E).copy(alpha = 0.95f),
+                                    RoundedCornerShape(12.dp)
+                                ).border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Remove", color = Color.White) },
+                                    onClick = {
+                                        viewModel.removeItem(item)
+                                        activeItem = null
+                                    },
+                                     leadingIcon = {
+                                        Icon(
+                                            painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_delete), 
+                                            contentDescription = null,
+                                            tint = Color.White
+                                        )
+                                    }
+                                )
+                                if (item is HomeApp) {
+                                    DropdownMenuItem(
+                                        text = { Text("App Info", color = Color.White) },
+                                        onClick = {
+                                            viewModel.openAppInfo(item.appInfo)
+                                            activeItem = null
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_info_details), 
+                                                contentDescription = null, 
+                                                tint = Color.White
+                                            )
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Uninstall", color = Color.Red.copy(alpha = 0.8f)) },
+                                        onClick = {
+                                            viewModel.uninstallApp(item.appInfo)
+                                            activeItem = null
+                                        },
+                                         leadingIcon = {
+                                            Icon(
+                                                painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_notification_clear_all), 
+                                                contentDescription = null,
+                                                tint = Color.Red.copy(alpha = 0.8f)
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -336,7 +417,13 @@ fun WidgetStack(
             .fillMaxSize()
             .padding(8.dp)
             .pointerInput(Unit) {
+                // Simplified gesture detection that might conflict less, or handled by parent
+                // For now, we keep it simple for stack swiping. 
+                // In a real launcher, we'd need complex touch event handling (intercepting touch)
                 detectVerticalDragGestures { change, dragAmount ->
+                    // change.consume() // Do NOT consume if we want parent to see it? 
+                    // Actually, standard widgets consume touch. 
+                    // We only want vertical swipes for stack.
                     change.consume()
                     if (dragAmount > 20) {
                         currentIndex = (currentIndex + 1) % stack.widgets.size

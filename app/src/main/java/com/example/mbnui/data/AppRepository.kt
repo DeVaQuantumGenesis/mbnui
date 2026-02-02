@@ -58,4 +58,25 @@ class AppRepository @Inject constructor(
     fun launchApp(app: AppInfo) {
         launcherApps.startMainActivity(app.componentName, app.userHandle, null, null)
     }
+
+    fun openAppInfo(app: AppInfo) {
+        try {
+            launcherApps.startAppDetailsActivity(app.componentName, app.userHandle, null, null)
+        } catch (e: Exception) {
+            val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = android.net.Uri.fromParts("package", app.packageName, null)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }
+    }
+
+    fun uninstallApp(app: AppInfo) {
+        val intent = Intent(Intent.ACTION_DELETE).apply {
+            data = android.net.Uri.fromParts("package", app.packageName, null)
+            putExtra(Intent.EXTRA_USER, app.userHandle)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
 }
