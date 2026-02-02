@@ -11,9 +11,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-import kotlinx.coroutines.flow.SharingStarted
+import com.example.mbnui.data.HomeApp
+import com.example.mbnui.data.HomeItem
+import com.example.mbnui.data.HomeWidgetStack
+import com.example.mbnui.data.LauncherWidget
+import com.example.mbnui.data.WidgetType
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 
 @HiltViewModel
 class LauncherViewModel @Inject constructor(
@@ -33,6 +38,17 @@ class LauncherViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Home items (Grid 4x6)
+    private val _homeItems = MutableStateFlow<List<HomeItem>>(emptyList())
+    val homeItems: StateFlow<List<HomeItem>> = _homeItems.asStateFlow()
+
+    // Drag and Drop state
+    private val _draggingItem = MutableStateFlow<AppInfo?>(null)
+    val draggingItem: StateFlow<AppInfo?> = _draggingItem.asStateFlow()
+
+    private val _isCustomizing = MutableStateFlow(false)
+    val isCustomizing: StateFlow<Boolean> = _isCustomizing.asStateFlow()
+
     init {
         loadApps()
     }
@@ -41,9 +57,52 @@ class LauncherViewModel @Inject constructor(
         _searchQuery.value = query
     }
 
+    fun setCustomizing(value: Boolean) {
+        _isCustomizing.value = value
+    }
+
+    fun onDragStart(app: AppInfo) {
+        _draggingItem.value = app
+    }
+
+    fun onDragEnd(x: Int, y: Int) {
+        val app = _draggingItem.value ?: return
+        _draggingItem.value = null
+        
+        // Add to home at position
+        addAppToHome(app, x, y)
+    }
+
+    private fun addAppToHome(app: AppInfo, x: Int, y: Int) {
+        val newItem = HomeApp(appInfo = app, x = x, y = y)
+        _homeItems.value = _homeItems.value + newItem
+    }
+
+    fun addWidget(type: WidgetType, x: Int, y: Int) {
+        val widget = LauncherWidget(type = type, label = type.name)
+        val stack = HomeWidgetStack(widgets = listOf(widget), x = x, y = y)
+        _homeItems.value = _homeItems.value + stack
+    }
+
+    fun moveItem(itemId: String, x: Int, y: Int) {
+        _homeItems.value = _homeItems.value.map {
+            if (it.id == itemId) {
+                // Return updated item (this is simplified, needs to handle type specifically)
+                when(it) {
+                    is HomeApp -> it.copy(x = x, y = y)
+                    is HomeWidgetStack -> it.copy(x = x, y = y)
+                }
+            } else it
+        }
+    }
+
     fun loadApps() {
         viewModelScope.launch {
             _apps.value = repository.getInstalledApps()
         }
+    }
+
+    fun launchApp(app: AppInfo) {
+        repository.launchApp(app)
     }
 }

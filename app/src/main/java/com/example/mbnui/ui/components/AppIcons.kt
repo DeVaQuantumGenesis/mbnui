@@ -44,17 +44,12 @@ fun AppItem(
             ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        GlassBox(
-            modifier = Modifier.size(64.dp),
-            cornerRadius = 16.dp
-        ) {
-            Image(
-                bitmap = app.icon,
-                contentDescription = app.name,
-                modifier = Modifier.fillMaxSize().padding(8.dp)
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
+        Image(
+            bitmap = app.icon,
+            contentDescription = app.name,
+            modifier = Modifier.size(60.dp).padding(4.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = app.name,
             fontSize = 12.sp,

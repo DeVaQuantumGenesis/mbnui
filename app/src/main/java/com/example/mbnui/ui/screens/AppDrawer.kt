@@ -30,6 +30,7 @@ fun AppDrawer(
     offsetY: Float,
     onClose: () -> Unit,
     onDrag: (Float) -> Unit,
+    onAppClick: (AppInfo) -> Unit,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -97,9 +98,7 @@ fun AppDrawer(
                         key = { it.key }
                     ) { app ->
                         AppItem(app) {
-                            app.launchIntent?.let { intent ->
-                                context.startActivity(intent)
-                            }
+                            onAppClick(app)
                         }
                     }
                 }

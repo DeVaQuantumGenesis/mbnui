@@ -1,10 +1,12 @@
 package com.example.mbnui.data
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.LauncherActivityInfo
 import android.content.pm.LauncherApps
 import android.os.Process
+import android.os.UserHandle
 import android.os.UserManager
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -19,11 +21,13 @@ import androidx.compose.runtime.Immutable
 @Immutable
 data class AppInfo(
     val packageName: String,
+    val className: String,
+    val userHandle: UserHandle,
     val name: String,
-    val icon: ImageBitmap,
-    val launchIntent: Intent?
+    val icon: ImageBitmap
 ) {
-    val key: String get() = packageName
+    val key: String get() = "${packageName}_${userHandle.hashCode()}"
+    val componentName: ComponentName get() = ComponentName(packageName, className)
 }
 
 @Singleton
@@ -34,26 +38,24 @@ class AppRepository @Inject constructor(
     private val userManager = context.getSystemService(Context.USER_SERVICE) as UserManager
 
     suspend fun getInstalledApps(): List<AppInfo> = withContext(Dispatchers.IO) {
-        val user = Process.myUserHandle()
         val profiles = userManager.userProfiles
-        
         val allApps = mutableListOf<AppInfo>()
         
         profiles.forEach { profile ->
             launcherApps.getActivityList(null, profile).forEach { activityInfo ->
                 val packageName = activityInfo.applicationInfo.packageName
+                val className = activityInfo.name
                 val name = activityInfo.label.toString()
-                
-                // Get icon (LauncherApps takes care of badging for work profiles)
                 val icon = activityInfo.getIcon(0).toBitmap().asImageBitmap()
                 
-                // Create launch intent for this specific activity
-                val launchIntent = launcherApps.getLaunchIntentForPackage(packageName, profile)
-                
-                allApps.add(AppInfo(packageName, name, icon, launchIntent))
+                allApps.add(AppInfo(packageName, className, profile, name, icon))
             }
         }
         
-        allApps.distinctBy { it.packageName }.sortedBy { it.name.lowercase() }
+        allApps.sortedBy { it.name.lowercase() }
+    }
+
+    fun launchApp(app: AppInfo) {
+        launcherApps.startMainActivity(app.componentName, app.userHandle, null, null)
     }
 }
