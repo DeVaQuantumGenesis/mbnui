@@ -12,9 +12,11 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 import com.example.mbnui.data.HomeApp
+import com.example.mbnui.data.HomeFolder
 import com.example.mbnui.data.HomeItem
 import com.example.mbnui.data.HomeWidgetStack
 import com.example.mbnui.data.LauncherWidget
+import com.example.mbnui.data.FolderShape
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
@@ -235,7 +237,7 @@ class LauncherViewModel @Inject constructor(
         }
     }
 
-    fun setFolderShape(folderId: String, shape: com.example.mbnui.data.FolderShape) {
+    fun setFolderShape(folderId: String, shape: FolderShape) {
         _homeItems.value = _homeItems.value.map {
             if (it is HomeFolder && it.id == folderId) it.copy(shape = shape) else it
         }
