@@ -57,7 +57,7 @@ fun WidgetPickerSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Icon
-                        val icon = provider.loadIcon(context, density = 0) // 0 for required density
+                        val icon = provider.loadIcon(context, 0) // 0 for required density
                         if (icon != null) {
                             Image(
                                 bitmap = icon.toBitmap().asImageBitmap(),
@@ -85,7 +85,7 @@ fun WidgetPickerSheet(
                             )
                         }
                     }
-                    Divider(color = Color.White.copy(0.1f), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 24.dp))
+                    HorizontalDivider(color = Color.White.copy(0.1f), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 24.dp))
                 }
             }
         }
