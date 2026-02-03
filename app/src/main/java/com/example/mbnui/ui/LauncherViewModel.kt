@@ -152,6 +152,19 @@ class LauncherViewModel @Inject constructor(
         val collidingItem = findItemAt(targetX, targetY, width, height, excludeId = itemId)
         
         if (collidingItem != null) {
+            // Folder Creation Logic
+            if (item is HomeApp && width == 1 && height == 1) {
+                if (collidingItem is HomeApp) {
+                     // Create Folder
+                     createFolder(item, collidingItem)
+                     return
+                } else if (collidingItem is HomeFolder) {
+                     // Add to Folder
+                     addToFolder(item, collidingItem)
+                     return
+                }
+            }
+            
             // Swap logic: simple 1-to-1 swap if sizes match, otherwise find nearest empty
             if (width == 1 && height == 1 && 
                 (collidingItem is HomeApp || (collidingItem is HomeWidgetStack && collidingItem.sizeX == 1 && collidingItem.sizeY == 1))) {
@@ -181,7 +194,53 @@ class LauncherViewModel @Inject constructor(
         _draggingItemId.value = null
         _dragStartPos.value = null
     }
-    
+
+    private fun createFolder(item1: HomeApp, item2: HomeApp) {
+        val newFolder = HomeFolder(
+            title = "Folder",
+            items = listOf(item2, item1), // Order collision first then dropped
+            x = item2.x,
+            y = item2.y
+        )
+        _homeItems.value = _homeItems.value.filter { it.id != item1.id && it.id != item2.id } + newFolder
+        _draggingItemId.value = null
+        _dragStartPos.value = null
+    }
+
+    private fun addToFolder(item: HomeApp, folder: HomeFolder) {
+        val updatedFolder = folder.copy(items = folder.items + item)
+        _homeItems.value = _homeItems.value.filter { it.id != item.id }.map { 
+             if (it.id == folder.id) updatedFolder else it
+         }
+        _draggingItemId.value = null
+        _dragStartPos.value = null
+    }
+
+    fun renameFolder(folderId: String, newName: String) {
+        _homeItems.value = _homeItems.value.map {
+            if (it is HomeFolder && it.id == folderId) it.copy(title = newName) else it
+        }
+    }
+
+    fun reorderFolderItems(folderId: String, fromIndex: Int, toIndex: Int) {
+        _homeItems.value = _homeItems.value.map {
+            if (it is HomeFolder && it.id == folderId) {
+                val newItems = it.items.toMutableList()
+                if (fromIndex in newItems.indices && toIndex in newItems.indices) {
+                    val movedItem = newItems.removeAt(fromIndex)
+                    newItems.add(toIndex, movedItem)
+                    it.copy(items = newItems)
+                } else it
+            } else it
+        }
+    }
+
+    fun setFolderShape(folderId: String, shape: com.example.mbnui.data.FolderShape) {
+        _homeItems.value = _homeItems.value.map {
+            if (it is HomeFolder && it.id == folderId) it.copy(shape = shape) else it
+        }
+    }
+
     private fun findItemAt(x: Int, y: Int, w: Int, h: Int, excludeId: String): HomeItem? {
         return _homeItems.value.find { item ->
             if (item.id == excludeId) return@find false
@@ -198,6 +257,7 @@ class LauncherViewModel @Inject constructor(
         return when(item) {
             is HomeApp -> item.copy(x = x, y = y)
             is HomeWidgetStack -> item.copy(x = x, y = y)
+            is HomeFolder -> item.copy(x = x, y = y)
         }
     }
     

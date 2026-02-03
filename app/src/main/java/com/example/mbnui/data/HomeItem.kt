@@ -19,6 +19,20 @@ data class HomeApp(
 ) : HomeItem()
 
 @Immutable
+data class HomeFolder(
+    override val id: String = UUID.randomUUID().toString(),
+    val title: String = "Folder",
+    val items: List<HomeApp>,
+    override val x: Int,
+    override val y: Int,
+    val shape: FolderShape = FolderShape.SQUIRCLE
+) : HomeItem()
+
+enum class FolderShape {
+    SQUARE, CIRCLE, SQUIRCLE, ROUNDED_SQUARE
+}
+
+@Immutable
 data class HomeWidgetStack(
     override val id: String = UUID.randomUUID().toString(),
     val widgets: List<LauncherWidget>,
