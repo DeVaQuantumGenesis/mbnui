@@ -55,6 +55,10 @@ class LauncherViewModel @Inject constructor(
 
     private val _isCustomizing = MutableStateFlow(false)
     val isCustomizing: StateFlow<Boolean> = _isCustomizing.asStateFlow()
+    
+    fun setDraggingItem(app: AppInfo?) {
+        _draggingItem.value = app
+    }
 
     init {
         loadApps()
@@ -120,7 +124,7 @@ class LauncherViewModel @Inject constructor(
     
     private val _dragStartPos = MutableStateFlow<Pair<Int, Int>?>(null)
 
-    fun onDrag(offset: Pair<Float, Float>) {
+    fun onDrag(offset: Pair<Float, Float>?) {
         _dragOffset.value = offset
     }
 
@@ -272,16 +276,21 @@ class LauncherViewModel @Inject constructor(
     }
 
     // App addition from drawer
-    fun onDragEnd(x: Int, y: Int) {
+    fun onDragEnd(targetX: Int, targetY: Int) {
         val app = _draggingItem.value ?: return
         
         _draggingItem.value = null
         _dragOffset.value = null
         
-        // Add to home at first available position
-        val (targetX, targetY) = findFirstEmptySlot() ?: return
-        
-        addAppToHome(app, targetX, targetY)
+        // Check if there is already an item at target
+        val collidingItem = findItemAt(targetX, targetY, 1, 1, excludeId = "")
+        if (collidingItem != null) {
+             // Fallback to first empty slot if target is occupied
+             val (emptyX, emptyY) = findFirstEmptySlot() ?: return
+             addAppToHome(app, emptyX, emptyY)
+        } else {
+             addAppToHome(app, targetX, targetY)
+        }
     }
 
     private fun findFirstEmptySlot(): Pair<Int, Int>? {

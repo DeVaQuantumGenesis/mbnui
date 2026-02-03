@@ -113,7 +113,7 @@ fun AppDrawer(
                                     },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
-                                        onAppDrag(change.position)
+                                        onAppDrag(dragAmount)
                                     },
                                     onDragEnd = {
                                         isDragging = false

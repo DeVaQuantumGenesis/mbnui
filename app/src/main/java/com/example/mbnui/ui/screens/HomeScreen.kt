@@ -270,12 +270,12 @@ fun HomeScreen(
                                                     activeItem = item
                                                 } else {
                                                     val currentOffset = viewModel.dragOffset.value ?: Pair(0f, 0f)
-                                                    val startPxX = (calculatedCellWidth.toPx() * item.x)
-                                                    val startPxY = (calculatedCellHeight.toPx() * item.y)
+                                                    val startPxX = with(density) { calculatedCellWidth.toPx() } * item.x
+                                                    val startPxY = with(density) { calculatedCellHeight.toPx() } * item.y
                                                     val dropPxX = startPxX + currentOffset.first
                                                     val dropPxY = startPxY + currentOffset.second
-                                                    val targetX = (dropPxX / calculatedCellWidth.toPx()).roundToInt().coerceIn(0, gridCols - 1)
-                                                    val targetY = (dropPxY / calculatedCellHeight.toPx()).roundToInt().coerceIn(0, gridRows - 1)
+                                                    val targetX = (dropPxX / with(density) { calculatedCellWidth.toPx() }).roundToInt().coerceIn(0, gridCols - 1)
+                                                    val targetY = (dropPxY / with(density) { calculatedCellHeight.toPx() }).roundToInt().coerceIn(0, gridRows - 1)
                                                     viewModel.onItemDrop(item.id, targetX, targetY)
                                                 }
                                                 viewModel.onHomeItemDragEnd(0, 0, 0f) 
@@ -391,9 +391,54 @@ fun HomeScreen(
                 GlassBox(modifier = Modifier.width(320.dp).height(96.dp), cornerRadius = 28.dp, isDark = true) {
                     Row(modifier = Modifier.fillMaxSize(), Arrangement.SpaceEvenly, Alignment.CenterVertically) {
                         apps.take(4).forEach { app ->
-                            DockItem(app) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.launchApp(app)
+                            var totalDragDistance = 0f
+                            Box(
+                                modifier = Modifier.pointerInput(app) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = { offset ->
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.setDraggingItem(app)
+                                            viewModel.onDrag(Pair(0f, 0f))
+                                            totalDragDistance = 0f
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            totalDragDistance += dragAmount.getDistance()
+                                            val current = viewModel.dragOffset.value ?: Pair(0f, 0f)
+                                            viewModel.onDrag(Pair(current.first + dragAmount.x, current.second + dragAmount.y))
+                                        },
+                                        onDragEnd = {
+                                            if (totalDragDistance > 10f) {
+                                                val currentOffset = viewModel.dragOffset.value ?: Pair(0f, 0f)
+                                                // Estimate grid target from dock position + offset
+                                                // Dock is roughly at bottom, we need to map to grid coordinates
+                                                // For now, use the same logic as drawer
+                                                val dropPxX = currentOffset.first
+                                                val dropPxY = currentOffset.second 
+                                                
+                                                // This is a rough estimation, ideally we use global coordinates
+                                                val screenWidthPx = with(density) { screenWidth.toPx() }
+                                                val screenHeightPx = with(density) { screenHeight.toPx() }
+                                                val targetX = (dropPxX / (screenWidthPx / gridCols)).roundToInt().coerceIn(0, gridCols - 1)
+                                                val targetY = (dropPxY / (screenHeightPx / gridRows)).roundToInt().coerceIn(0, gridRows - 1)
+                                                
+                                                viewModel.onDragEnd(targetX, targetY)
+                                            } else {
+                                                viewModel.setDraggingItem(null)
+                                                viewModel.onDrag(null)
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            viewModel.setDraggingItem(null)
+                                            viewModel.onDrag(null)
+                                        }
+                                    )
+                                }
+                            ) {
+                                DockItem(app) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.launchApp(app)
+                                }
                             }
                         }
                     }
@@ -411,11 +456,22 @@ fun HomeScreen(
             },
             onAppClick = { app -> viewModel.launchApp(app); drawerProgress = 1f },
             onAppDragStart = { app, offset ->
-                 viewModel.onDragStart(HomeApp(appInfo = app, x = 0, y = 0), Pair(offset.x, offset.y)) 
+                 viewModel.setDraggingItem(app)
+                 viewModel.onDrag(Pair(offset.x, offset.y)) 
                  drawerProgress = 1f 
             },
-            onAppDrag = { offset -> viewModel.onDrag(Pair(offset.x, offset.y)) },
-            onAppDragEnd = { viewModel.onDragEnd(0, 0) },
+            onAppDrag = { offset -> 
+                val current = viewModel.dragOffset.value ?: Pair(0f, 0f)
+                viewModel.onDrag(Pair(current.first + offset.x, current.second + offset.y)) 
+            },
+            onAppDragEnd = { 
+                val currentOffset = viewModel.dragOffset.value ?: Pair(0f, 0f)
+                val screenWidthPx = with(density) { screenWidth.toPx() }
+                val screenHeightPx = with(density) { screenHeight.toPx() }
+                val targetX = (currentOffset.first / (screenWidthPx / gridCols)).roundToInt().coerceIn(0, gridCols - 1)
+                val targetY = (currentOffset.second / (screenHeightPx / gridRows)).roundToInt().coerceIn(0, gridRows - 1)
+                viewModel.onDragEnd(targetX, targetY) 
+            },
             searchQuery = searchQuery,
             onSearchQueryChange = { viewModel.onSearchQueryChange(it) },
             onAppReorder = { from, to -> viewModel.onAppDrawerReorder(from, to) } 
