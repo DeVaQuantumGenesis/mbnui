@@ -1,5 +1,6 @@
 package com.example.mbnui.ui.screens
 
+import android.health.connect.datatypes.AppInfo
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,6 +27,8 @@ import com.example.mbnui.ui.components.GlassBox
 import com.example.mbnui.ui.components.GlassSearchBar
 import com.example.mbnui.ui.components.OneUiMenu
 import com.example.mbnui.ui.components.OneUiMenuItem
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 
 @Composable
 fun AppDrawer(
@@ -33,9 +36,9 @@ fun AppDrawer(
     offsetY: Float,
     onClose: () -> Unit,
     onDrag: (Float) -> Unit,
-    onAppClick: (AppInfo, androidx.compose.ui.geometry.Rect) -> Unit,
-    onAppDragStart: (AppInfo, androidx.compose.ui.geometry.Offset) -> Unit,
-    onAppDrag: (androidx.compose.ui.geometry.Offset) -> Unit,
+    onAppClick: (AppInfo, Rect) -> Unit,
+    onAppDragStart: (AppInfo, Offset) -> Unit,
+    onAppDrag: (Offset) -> Unit,
     onAppDragEnd: () -> Unit,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
@@ -155,7 +158,7 @@ fun AppDrawer(
                                     OneUiMenuItem(
                                         text = "Add to Home",
                                         icon = android.R.drawable.ic_menu_add,
-                                        onClick = { onAppDragStart(app, androidx.compose.ui.geometry.Offset.Zero); onAppDragEnd(); showMenu = false }
+                                        onClick = { onAppDragStart(app, Offset.Zero); onAppDragEnd(); showMenu = false }
                                     )
                                     OneUiMenuItem(
                                         text = "App Info",

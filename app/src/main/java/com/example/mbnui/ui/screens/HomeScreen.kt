@@ -71,6 +71,9 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import com.example.mbnui.data.FolderShape
 import com.example.mbnui.data.HomeFolder
 import kotlin.math.roundToInt
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.geometry.Rect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
