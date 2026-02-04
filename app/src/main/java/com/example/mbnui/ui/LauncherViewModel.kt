@@ -20,6 +20,8 @@ import com.example.mbnui.data.FolderShape
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
+import androidx.compose.ui.geometry.Rect
+import kotlinx.coroutines.delay
 
 @HiltViewModel
 class LauncherViewModel @Inject constructor(
@@ -55,6 +57,10 @@ class LauncherViewModel @Inject constructor(
 
     private val _isCustomizing = MutableStateFlow(false)
     val isCustomizing: StateFlow<Boolean> = _isCustomizing.asStateFlow()
+
+    data class LaunchingState(val app: AppInfo, val rect: Rect)
+    private val _launchingApp = MutableStateFlow<LaunchingState?>(null)
+    val launchingApp: StateFlow<LaunchingState?> = _launchingApp.asStateFlow()
     
     fun setDraggingItem(app: AppInfo?) {
         _draggingItem.value = app
@@ -366,7 +372,17 @@ class LauncherViewModel @Inject constructor(
         }
     }
 
-    fun launchApp(app: AppInfo) {
-        repository.launchApp(app)
+    fun launchApp(app: AppInfo, sourceRect: Rect? = null) {
+        if (sourceRect != null) {
+            viewModelScope.launch {
+                _launchingApp.value = LaunchingState(app, sourceRect)
+                delay(400) // Animation duration
+                repository.launchApp(app)
+                delay(500) // Keep overlay for a bit while app loads
+                _launchingApp.value = null
+            }
+        } else {
+            repository.launchApp(app)
+        }
     }
 }

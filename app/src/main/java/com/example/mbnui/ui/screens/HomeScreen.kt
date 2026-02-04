@@ -25,6 +25,7 @@ import com.example.mbnui.ui.LauncherViewModel
 import com.example.mbnui.ui.components.GlassBox
 import com.example.mbnui.ui.components.GlassClock
 import com.example.mbnui.ui.components.GlassSearchBar
+import com.example.mbnui.ui.components.AppLaunchOverlay
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -60,6 +61,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.zIndex
 import com.example.mbnui.ui.components.AppItem
 import com.example.mbnui.ui.components.DockItem
+import com.example.mbnui.ui.components.OneUiMenu
+import com.example.mbnui.ui.components.OneUiMenuItem
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -85,6 +88,7 @@ fun HomeScreen(
     val widgetProviders by viewModel.widgetProviders.collectAsState()
     val gridCols by viewModel.gridCols.collectAsState()
     val gridRows by viewModel.gridRows.collectAsState()
+    val launchingApp by viewModel.launchingApp.collectAsState()
     
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -105,6 +109,7 @@ fun HomeScreen(
     var showSettingsSheet by remember { mutableStateOf(false) }
 
     var activeItem by remember { mutableStateOf<HomeItem?>(null) }
+    var activeApp by remember { mutableStateOf<AppInfo?>(null) }
     var activeFolderId by remember { mutableStateOf<String?>(null) }
     var renamingFolderId by remember { mutableStateOf<String?>(null) }
     
@@ -251,12 +256,14 @@ fun HomeScreen(
                                             onDragStart = { offset ->
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 totalDragDistance = 0f
+                                                // Pre-emptively show menu, it will be hidden if drag distance exceeds threshold
+                                                activeItem = item
                                             },
                                             onDrag = { change, dragAmount ->
                                                 change.consume()
                                                 totalDragDistance += dragAmount.getDistance()
-                                                if (totalDragDistance > 10f) {
-                                                    activeItem = null
+                                                if (totalDragDistance > 15f) {
+                                                    activeItem = null // Hide menu if we move too much
                                                     resizingWidgetId = null 
                                                     if (viewModel.draggingItemId.value != item.id) {
                                                         viewModel.onDragStart(item, Pair(0f, 0f))
@@ -266,8 +273,8 @@ fun HomeScreen(
                                                 }
                                             },
                                             onDragEnd = {
-                                                if (totalDragDistance < 10f) {
-                                                    activeItem = item
+                                                if (totalDragDistance <= 15f) {
+                                                    // Menu remains visible
                                                 } else {
                                                     val currentOffset = viewModel.dragOffset.value ?: Pair(0f, 0f)
                                                     val startPxX = with(density) { calculatedCellWidth.toPx() } * item.x
@@ -288,14 +295,16 @@ fun HomeScreen(
                                     }
                                 }
                         ) {
-                            Box(modifier = Modifier.fillMaxSize()
-                                .clickable(enabled = draggingHomeItemId == null && !isResizing) {
-                                    if (item is HomeApp) viewModel.launchApp(item.appInfo)
+                            var itemRect by remember { mutableStateOf(Rect.Zero) }
+                            Box(modifier = Modifier
+                                .fillMaxSize()
+                                .onGloballyPositioned { itemRect = it.boundsInWindow() }
+                                .clickable(enabled = draggingHomeItemId == null && !isResizing && item is HomeFolder) {
                                     if (item is HomeFolder) activeFolderId = item.id
                                 }
                             ) {
                                  when (item) {
-                                    is HomeApp -> AppItem(app = item.appInfo, onClick = { viewModel.launchApp(item.appInfo) })
+                                    is HomeApp -> AppItem(app = item.appInfo, onClick = { rect -> viewModel.launchApp(item.appInfo, rect) })
                                     is HomeWidgetStack -> WidgetStack(item, appWidgetHost)
                                     is HomeFolder -> FolderIcon(folder = item)
                                 }
@@ -328,53 +337,48 @@ fun HomeScreen(
                             }
 
                             if (activeItem?.id == item.id) {
-                                 DropdownMenu(
+                                OneUiMenu(
                                     expanded = true,
                                     onDismissRequest = { activeItem = null },
-                                    modifier = Modifier.background(Color(0xFF1A1A2E).copy(alpha = 0.95f), RoundedCornerShape(12.dp))
-                                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                    modifier = Modifier.padding(top = 40.dp) // Adjust based on item size
                                 ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Remove", color = Color.White) },
-                                        leadingIcon = { Icon(painterResource(android.R.drawable.ic_menu_delete), null, tint = Color.White) },
+                                    OneUiMenuItem(
+                                        text = "Remove",
+                                        icon = android.R.drawable.ic_menu_delete,
                                         onClick = { viewModel.removeItem(item); activeItem = null }
                                     )
                                     if (item is HomeWidgetStack) {
-                                        DropdownMenuItem(
-                                            text = { Text("Resize", color = Color.White) },
-                                            leadingIcon = { Icon(painterResource(android.R.drawable.ic_menu_crop), null, tint = Color.White) },
+                                        OneUiMenuItem(
+                                            text = "Resize",
+                                            icon = android.R.drawable.ic_menu_crop,
                                             onClick = { resizingWidgetId = item.id; activeItem = null }
                                         )
                                     }
                                     if (item is HomeFolder) {
-                                        DropdownMenuItem(
-                                            text = { Text("Rename", color = Color.White) },
-                                            leadingIcon = { Icon(painterResource(android.R.drawable.ic_menu_edit), null, tint = Color.White) },
+                                        OneUiMenuItem(
+                                            text = "Rename",
+                                            icon = android.R.drawable.ic_menu_edit,
                                             onClick = { renamingFolderId = item.id; activeItem = null }
                                         )
-                                        DropdownMenu(
-                                            expanded = true,
-                                            onDismissRequest = { },
-                                            modifier = Modifier.background(Color(0xFF1A1A2E).copy(alpha = 0.8f))
-                                        ) {
-                                            FolderShape.values().forEach { shape ->
-                                                DropdownMenuItem(
-                                                    text = { Text(shape.name, color = Color.White) },
-                                                    onClick = { viewModel.setFolderShape(item.id, shape); activeItem = null }
-                                                )
-                                            }
+                                        // Simplified shape picker for OneUI style
+                                        FolderShape.values().forEach { shape ->
+                                            OneUiMenuItem(
+                                                text = "Shape: ${shape.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                                                onClick = { viewModel.setFolderShape(item.id, shape); activeItem = null }
+                                            )
                                         }
                                     }
                                     if (item is HomeApp) {
-                                        DropdownMenuItem(
-                                            text = { Text("App Info", color = Color.White) },
-                                            leadingIcon = { Icon(painterResource(android.R.drawable.ic_menu_info_details), null, tint = Color.White) },
+                                        OneUiMenuItem(
+                                            text = "App Info",
+                                            icon = android.R.drawable.ic_menu_info_details,
                                             onClick = { viewModel.openAppInfo(item.appInfo); activeItem = null }
                                         )
-                                        DropdownMenuItem(
-                                            text = { Text("Uninstall", color = Color.Red.copy(alpha = 0.8f)) },
-                                            leadingIcon = { Icon(painterResource(android.R.drawable.ic_notification_clear_all), null, tint = Color.Red) },
-                                            onClick = { viewModel.uninstallApp(item.appInfo); activeItem = null }
+                                        OneUiMenuItem(
+                                            text = "Uninstall",
+                                            icon = android.R.drawable.ic_notification_clear_all,
+                                            onClick = { viewModel.uninstallApp(item.appInfo); activeItem = null },
+                                            isDestructive = true
                                         )
                                     }
                                 }
@@ -397,30 +401,28 @@ fun HomeScreen(
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = { offset ->
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            viewModel.setDraggingItem(app)
-                                            viewModel.onDrag(Pair(0f, 0f))
                                             totalDragDistance = 0f
+                                            activeApp = app
                                         },
                                         onDrag = { change, dragAmount ->
                                             change.consume()
                                             totalDragDistance += dragAmount.getDistance()
-                                            val current = viewModel.dragOffset.value ?: Pair(0f, 0f)
-                                            viewModel.onDrag(Pair(current.first + dragAmount.x, current.second + dragAmount.y))
+                                            if (totalDragDistance > 15f) {
+                                                activeApp = null
+                                                if (viewModel.draggingItem.value != app) {
+                                                    viewModel.setDraggingItem(app)
+                                                }
+                                                val current = viewModel.dragOffset.value ?: Pair(0f, 0f)
+                                                viewModel.onDrag(Pair(current.first + dragAmount.x, current.second + dragAmount.y))
+                                            }
                                         },
                                         onDragEnd = {
-                                            if (totalDragDistance > 10f) {
+                                            if (totalDragDistance > 15f) {
                                                 val currentOffset = viewModel.dragOffset.value ?: Pair(0f, 0f)
-                                                // Estimate grid target from dock position + offset
-                                                // Dock is roughly at bottom, we need to map to grid coordinates
-                                                // For now, use the same logic as drawer
-                                                val dropPxX = currentOffset.first
-                                                val dropPxY = currentOffset.second 
-                                                
-                                                // This is a rough estimation, ideally we use global coordinates
                                                 val screenWidthPx = with(density) { screenWidth.toPx() }
                                                 val screenHeightPx = with(density) { screenHeight.toPx() }
-                                                val targetX = (dropPxX / (screenWidthPx / gridCols)).roundToInt().coerceIn(0, gridCols - 1)
-                                                val targetY = (dropPxY / (screenHeightPx / gridRows)).roundToInt().coerceIn(0, gridRows - 1)
+                                                val targetX = (currentOffset.first / (screenWidthPx / gridCols)).roundToInt().coerceIn(0, gridCols - 1)
+                                                val targetY = (currentOffset.second / (screenHeightPx / gridRows)).roundToInt().coerceIn(0, gridRows - 1)
                                                 
                                                 viewModel.onDragEnd(targetX, targetY)
                                             } else {
@@ -435,9 +437,28 @@ fun HomeScreen(
                                     )
                                 }
                             ) {
-                                DockItem(app) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.launchApp(app)
+                                DockItem(app) { rect ->
+                                    viewModel.launchApp(app, rect)
+                                }
+
+                                if (activeApp?.key == app.key) {
+                                    OneUiMenu(
+                                        expanded = true,
+                                        onDismissRequest = { activeApp = null },
+                                        modifier = Modifier.padding(bottom = 60.dp) // Show above dock
+                                    ) {
+                                        OneUiMenuItem(
+                                            text = "App Info",
+                                            icon = android.R.drawable.ic_menu_info_details,
+                                            onClick = { viewModel.openAppInfo(app); activeApp = null }
+                                        )
+                                        OneUiMenuItem(
+                                            text = "Uninstall",
+                                            icon = android.R.drawable.ic_notification_clear_all,
+                                            onClick = { viewModel.uninstallApp(app); activeApp = null },
+                                            isDestructive = true
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -454,7 +475,7 @@ fun HomeScreen(
                 val delta = (dragAmount / density.density) / screenHeight.value
                 drawerProgress = (drawerProgress + delta * 1.5f).coerceIn(0f, 1f)
             },
-            onAppClick = { app -> viewModel.launchApp(app); drawerProgress = 1f },
+            onAppClick = { app, rect -> viewModel.launchApp(app, rect); drawerProgress = 1f },
             onAppDragStart = { app, offset ->
                  viewModel.setDraggingItem(app)
                  viewModel.onDrag(Pair(offset.x, offset.y)) 
@@ -474,7 +495,9 @@ fun HomeScreen(
             },
             searchQuery = searchQuery,
             onSearchQueryChange = { viewModel.onSearchQueryChange(it) },
-            onAppReorder = { from, to -> viewModel.onAppDrawerReorder(from, to) } 
+            onAppReorder = { from, to -> viewModel.onAppDrawerReorder(from, to) },
+            onAppInfo = { viewModel.openAppInfo(it) },
+            onUninstall = { viewModel.uninstallApp(it) }
         )
 
         if (draggingHomeItemId != null || draggingAppInfo != null) {
@@ -538,10 +561,9 @@ fun HomeScreen(
                              verticalArrangement = Arrangement.spacedBy(16.dp),
                              horizontalArrangement = Arrangement.spacedBy(16.dp)
                          ) {
-                             items(activeFolder.items.size) { index ->
+                              items(activeFolder.items.size) { index ->
                                  val app = activeFolder.items[index]
-                                 Column(
-                                     horizontalAlignment = Alignment.CenterHorizontally,
+                                 Box(
                                      modifier = Modifier
                                          .pointerInput(activeFolder.id, index) {
                                              detectDragGesturesAfterLongPress(
@@ -553,14 +575,11 @@ fun HomeScreen(
                                                  }
                                              )
                                          }
-                                         .clickable { 
-                                             viewModel.launchApp(app.appInfo) 
-                                             activeFolderId = null
-                                         }
                                  ) {
-                                     Image(bitmap = app.appInfo.icon, contentDescription = null, modifier = Modifier.size(48.dp))
-                                     Spacer(modifier = Modifier.height(4.dp))
-                                     Text(text = app.appInfo.name, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                     AppItem(app = app.appInfo, onClick = { rect ->
+                                         viewModel.launchApp(app.appInfo, rect)
+                                         activeFolderId = null
+                                     })
                                  }
                              }
                          }
@@ -601,6 +620,14 @@ fun HomeScreen(
                 },
                 onOpenWidgets = { showSettingsSheet = false; showWidgetPicker = true },
                 onDismiss = { showSettingsSheet = false }
+            )
+        }
+
+        launchingApp?.let { state ->
+            AppLaunchOverlay(
+                app = state.app,
+                sourceRect = state.rect,
+                onAnimationEnd = { /* ViewModel handles the actual launch delay */ }
             )
         }
     }

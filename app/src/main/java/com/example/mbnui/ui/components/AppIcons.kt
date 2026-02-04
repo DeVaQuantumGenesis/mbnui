@@ -22,12 +22,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
 import com.example.mbnui.data.AppInfo
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.geometry.Rect
 
 @Composable
 fun AppItem(
     app: AppInfo,
-    onClick: () -> Unit
+    onClick: (Rect) -> Unit
 ) {
+    var itemRect by remember { mutableStateOf(Rect.Zero) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -40,20 +44,22 @@ fun AppItem(
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
+            .onGloballyPositioned { itemRect = it.boundsInWindow() }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick
+                onClick = { onClick(itemRect) }
             ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Squircle Icon
+        // Expressive Squircle Icon
         Box(
             modifier = Modifier
-                .size(60.dp)
+                .size(64.dp)
                 .padding(4.dp)
-                .background(Color.White, RoundedCornerShape(22.dp))
-                .clip(RoundedCornerShape(22.dp))
+                .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(24.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(24.dp))
         ) {
              Image(
                 bitmap = app.icon,
@@ -78,8 +84,9 @@ fun AppItem(
 @Composable
 fun DockItem(
     app: AppInfo,
-    onClick: () -> Unit
+    onClick: (Rect) -> Unit
 ) {
+    var itemRect by remember { mutableStateOf(Rect.Zero) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -91,10 +98,11 @@ fun DockItem(
         modifier = Modifier
             .size(56.dp)
             .scale(scale)
+            .onGloballyPositioned { itemRect = it.boundsInWindow() }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick
+                onClick = { onClick(itemRect) }
             ),
         contentAlignment = Alignment.Center
     ) {

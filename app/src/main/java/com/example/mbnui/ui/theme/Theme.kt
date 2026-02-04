@@ -22,6 +22,18 @@ private val LightColorScheme = lightColorScheme(
     tertiary = Pink40
 )
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Shapes
+import androidx.compose.ui.unit.dp
+
+private val ExpressiveShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(28.dp),
+    extraLarge = RoundedCornerShape(32.dp)
+)
+
 @Composable
 fun MbnuiTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -40,6 +52,7 @@ fun MbnuiTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = ExpressiveShapes,
         content = content
     )
 }

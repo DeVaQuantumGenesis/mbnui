@@ -24,6 +24,8 @@ import com.example.mbnui.data.AppInfo
 import com.example.mbnui.ui.components.AppItem
 import com.example.mbnui.ui.components.GlassBox
 import com.example.mbnui.ui.components.GlassSearchBar
+import com.example.mbnui.ui.components.OneUiMenu
+import com.example.mbnui.ui.components.OneUiMenuItem
 
 @Composable
 fun AppDrawer(
@@ -31,13 +33,15 @@ fun AppDrawer(
     offsetY: Float,
     onClose: () -> Unit,
     onDrag: (Float) -> Unit,
-    onAppClick: (AppInfo) -> Unit,
+    onAppClick: (AppInfo, androidx.compose.ui.geometry.Rect) -> Unit,
     onAppDragStart: (AppInfo, androidx.compose.ui.geometry.Offset) -> Unit,
     onAppDrag: (androidx.compose.ui.geometry.Offset) -> Unit,
     onAppDragEnd: () -> Unit,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onAppReorder: (Int, Int) -> Unit = { _, _ -> },
+    onAppInfo: (AppInfo) -> Unit = {},
+    onUninstall: (AppInfo) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -103,21 +107,33 @@ fun AppDrawer(
                         key = { it.key }
                     ) { app ->
                         var isDragging by remember { mutableStateOf(false) }
-                        
+                        var showMenu by remember { mutableStateOf(false) }
+                        var totalDragDistance = 0f
+
                         Box(
-                            modifier = Modifier.pointerInput(Unit) {
+                            modifier = Modifier.pointerInput(app) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = { offset ->
-                                        isDragging = true
-                                        onAppDragStart(app, offset)
+                                        totalDragDistance = 0f
+                                        showMenu = true
                                     },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
-                                        onAppDrag(dragAmount)
+                                        totalDragDistance += dragAmount.getDistance()
+                                        if (totalDragDistance > 15f) {
+                                            showMenu = false
+                                            isDragging = true
+                                            onAppDragStart(app, offset)
+                                        }
+                                        if (isDragging) {
+                                            onAppDrag(dragAmount)
+                                        }
                                     },
                                     onDragEnd = {
-                                        isDragging = false
-                                        onAppDragEnd()
+                                        if (isDragging) {
+                                            isDragging = false
+                                            onAppDragEnd()
+                                        }
                                     },
                                     onDragCancel = {
                                         isDragging = false
@@ -126,8 +142,33 @@ fun AppDrawer(
                                 )
                             }
                         ) {
-                            AppItem(app) {
-                                onAppClick(app)
+                            AppItem(app) { rect ->
+                                onAppClick(app, rect)
+                            }
+
+                            if (showMenu) {
+                                OneUiMenu(
+                                    expanded = true,
+                                    onDismissRequest = { showMenu = false },
+                                    modifier = Modifier.padding(top = 40.dp)
+                                ) {
+                                    OneUiMenuItem(
+                                        text = "Add to Home",
+                                        icon = android.R.drawable.ic_menu_add,
+                                        onClick = { onAppDragStart(app, androidx.compose.ui.geometry.Offset.Zero); onAppDragEnd(); showMenu = false }
+                                    )
+                                    OneUiMenuItem(
+                                        text = "App Info",
+                                        icon = android.R.drawable.ic_menu_info_details,
+                                        onClick = { onAppInfo(app); showMenu = false }
+                                    )
+                                    OneUiMenuItem(
+                                        text = "Uninstall",
+                                        icon = android.R.drawable.ic_notification_clear_all,
+                                        onClick = { onUninstall(app); showMenu = false },
+                                        isDestructive = true
+                                    )
+                                }
                             }
                         }
                     }
