@@ -1,6 +1,5 @@
 package com.example.mbnui.ui.screens
 
-import android.health.connect.datatypes.AppInfo
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -111,12 +110,14 @@ fun AppDrawer(
                     ) { app ->
                         var isDragging by remember { mutableStateOf(false) }
                         var showMenu by remember { mutableStateOf(false) }
-                        var totalDragDistance = 0f
+                        var totalDragDistance by remember { mutableFloatStateOf(0f) }
+                        var dragStartOffset by remember { mutableStateOf(Offset.Zero) }
 
                         Box(
                             modifier = Modifier.pointerInput(app) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = { offset ->
+                                        dragStartOffset = offset
                                         totalDragDistance = 0f
                                         showMenu = true
                                     },
@@ -126,7 +127,7 @@ fun AppDrawer(
                                         if (totalDragDistance > 15f) {
                                             showMenu = false
                                             isDragging = true
-                                            onAppDragStart(app, offset)
+                                            onAppDragStart(app, dragStartOffset)
                                         }
                                         if (isDragging) {
                                             onAppDrag(dragAmount)
