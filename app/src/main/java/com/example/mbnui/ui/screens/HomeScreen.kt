@@ -68,6 +68,7 @@ import com.example.mbnui.ui.components.OneUiMenu
 import com.example.mbnui.ui.components.OneUiMenuItem
 import com.example.mbnui.ui.components.EdgePanel
 import com.example.mbnui.ui.components.PredictiveBar
+import com.example.mbnui.ui.components.AnimatedDock
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -434,79 +435,10 @@ fun HomeScreen(
                 contentAlignment = Alignment.Center
             ) {
                 GlassBox(modifier = Modifier.width(320.dp).height(96.dp), cornerRadius = 28.dp, isDark = true) {
-                    Row(modifier = Modifier.fillMaxSize(), Arrangement.SpaceEvenly, Alignment.CenterVertically) {
-                        apps.take(4).forEach { app ->
-                            var totalDragDistance = 0f
-                            Box(
-                                modifier = Modifier.pointerInput(app) {
-                                    detectDragGesturesAfterLongPress(
-                                        onDragStart = { offset ->
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            totalDragDistance = 0f
-                                            activeApp = app
-                                        },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            totalDragDistance += dragAmount.getDistance()
-                                            if (totalDragDistance > 15f) {
-                                                activeApp = null
-                                                if (viewModel.draggingItem.value != app) {
-                                                    viewModel.setDraggingItem(app)
-                                                }
-                                                val current = viewModel.dragOffset.value ?: Pair(0f, 0f)
-                                                viewModel.onDrag(Pair(current.first + dragAmount.x, current.second + dragAmount.y))
-                                            }
-                                        },
-                                        onDragEnd = {
-                                            if (totalDragDistance > 15f) {
-                                                val currentOffset = viewModel.dragOffset.value ?: Pair(0f, 0f)
-                                                val screenWidthPx = with(density) { screenWidth.toPx() }
-                                                val screenHeightPx = with(density) { screenHeight.toPx() }
-                                                val targetX = (currentOffset.first / (screenWidthPx / gridCols)).roundToInt().coerceIn(0, gridCols - 1)
-                                                val targetY = (currentOffset.second / (screenHeightPx / gridRows)).roundToInt().coerceIn(0, gridRows - 1)
-                                                
-                                                viewModel.onDragEnd(targetX, targetY)
-                                            } else {
-                                                viewModel.setDraggingItem(null)
-                                                viewModel.onDrag(null)
-                                            }
-                                        },
-                                        onDragCancel = {
-                                            viewModel.setDraggingItem(null)
-                                            viewModel.onDrag(null)
-                                        }
-                                    )
-                                }
-                            ) {
-                                var dockRect by remember { mutableStateOf(Rect.Zero) }
-                                Box(modifier = Modifier.onGloballyPositioned { dockRect = it.boundsInWindow() }) {
-                                    DockItem(app) { rect ->
-                                        viewModel.launchApp(app, rect)
-                                    }
-                                }
-
-                                if (activeApp?.key == app.key) {
-                                    OneUiMenu(
-                                        expanded = true,
-                                        onDismissRequest = { activeApp = null },
-                                        anchorBounds = dockRect
-                                    ) {
-                                        OneUiMenuItem(
-                                            text = "App Info",
-                                            icon = android.R.drawable.ic_menu_info_details,
-                                            onClick = { viewModel.openAppInfo(app); activeApp = null }
-                                        )
-                                        OneUiMenuItem(
-                                            text = "Uninstall",
-                                            icon = android.R.drawable.ic_notification_clear_all,
-                                            onClick = { viewModel.uninstallApp(app); activeApp = null },
-                                            isDestructive = true
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+                        AnimatedDock(apps = apps.take(4), modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp), onAppClick = { app, rect ->
+                            // Launch app with bounds for overlay animation
+                            viewModel.launchApp(app, rect)
+                        })
                 }
             }
         }
