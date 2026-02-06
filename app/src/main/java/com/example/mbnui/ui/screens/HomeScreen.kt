@@ -28,6 +28,7 @@ import com.example.mbnui.ui.components.GlassSearchBar
 import com.example.mbnui.ui.components.AppLaunchOverlay
 
 import androidx.compose.animation.core.*
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -120,6 +121,7 @@ fun HomeScreen(
     
     var pendingWidgetId by remember { mutableStateOf<Int?>(null) }
     var pendingProviderInfo by remember { mutableStateOf<android.appwidget.AppWidgetProviderInfo?>(null) }
+    var pendingTargetStackId by remember { mutableStateOf<String?>(null) }
 
     val bindWidgetLauncher = rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -128,7 +130,12 @@ fun HomeScreen(
             val id = pendingWidgetId
             val info = pendingProviderInfo
             if (id != null && info != null) {
-                viewModel.addWidget(id, info.provider.className, info.loadLabel(context.packageManager), 0, 0)
+                if (pendingTargetStackId != null) {
+                    viewModel.addWidgetToStack(pendingTargetStackId!!, id, info.provider.className, info.loadLabel(context.packageManager))
+                    pendingTargetStackId = null
+                } else {
+                    viewModel.addWidget(id, info.provider.className, info.loadLabel(context.packageManager), 0, 0)
+                }
             }
         }
         pendingWidgetId = null
@@ -140,7 +147,12 @@ fun HomeScreen(
         val id = appWidgetHost.allocateAppWidgetId()
         val allowed = appWidgetManager.bindAppWidgetIdIfAllowed(id, provider.provider)
         if (allowed) {
-            viewModel.addWidget(id, provider.provider.className, provider.loadLabel(context.packageManager), 0, 0)
+            if (pendingTargetStackId != null) {
+                viewModel.addWidgetToStack(pendingTargetStackId!!, id, provider.provider.className, provider.loadLabel(context.packageManager))
+                pendingTargetStackId = null
+            } else {
+                viewModel.addWidget(id, provider.provider.className, provider.loadLabel(context.packageManager), 0, 0)
+            }
             showWidgetPicker = false
         } else {
             pendingWidgetId = id
@@ -355,6 +367,11 @@ fun HomeScreen(
                                             text = "Resize",
                                             icon = android.R.drawable.ic_menu_crop,
                                             onClick = { resizingWidgetId = item.id; activeItem = null }
+                                        )
+                                        OneUiMenuItem(
+                                            text = "Manage Stack",
+                                            icon = android.R.drawable.ic_menu_manage,
+                                            onClick = { pendingTargetStackId = item.id; showWidgetPicker = true; activeItem = null }
                                         )
                                     }
                                     if (item is HomeFolder) {
@@ -685,30 +702,53 @@ fun WidgetStack(
     stack: HomeWidgetStack,
     appWidgetHost: android.appwidget.AppWidgetHost
 ) {
-    var currentIndex by remember { mutableIntStateOf(0) }
+    var currentIndex by remember { mutableIntStateOf(stack.currentIndex.coerceAtLeast(0)) }
     val context = LocalContext.current
+    var userInteracting by remember { mutableStateOf(false) }
+
+    // Auto-rotate similar to iOS Smart Stack (simple rotation)
+    LaunchedEffect(stack.id, stack.widgets.size) {
+        while (true) {
+            if (!userInteracting && stack.widgets.size > 1) {
+                kotlinx.coroutines.delay(8000)
+                currentIndex = (currentIndex + 1) % stack.widgets.size
+            } else {
+                kotlinx.coroutines.delay(500)
+            }
+        }
+    }
+
     Box(
-        modifier = Modifier.fillMaxSize().padding(8.dp)
-            .pointerInput(Unit) {
-                detectVerticalDragGestures { change, dragAmount ->
-                    change.consume()
-                    if (dragAmount > 20) currentIndex = (currentIndex + 1) % stack.widgets.size
-                    else if (dragAmount < -20) currentIndex = (currentIndex - 1 + stack.widgets.size) % stack.widgets.size
-                }
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(8.dp)
+            .pointerInput(stack.id) {
+                detectVerticalDragGestures(
+                    onVerticalDrag = { change, dragAmount ->
+                        change.consume()
+                        userInteracting = true
+                        if (dragAmount > 20) currentIndex = (currentIndex + 1) % stack.widgets.size
+                        else if (dragAmount < -20) currentIndex = (currentIndex - 1 + stack.widgets.size) % stack.widgets.size
+                    },
+                    onDragEnd = { userInteracting = false },
+                    onDragCancel = { userInteracting = false }
+                )
             }
     ) {
         val currentWidget = stack.widgets.getOrNull(currentIndex)
-        if (currentWidget != null) {
-            val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
-            val appWidgetInfo = appWidgetManager.getAppWidgetInfo(currentWidget.appWidgetId)
-            if (appWidgetInfo != null) {
-                AndroidView(
-                    factory = { ctx -> appWidgetHost.createView(ctx, currentWidget.appWidgetId, appWidgetInfo).apply { setPadding(0, 0, 0, 0) } },
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                 GlassBox(modifier = Modifier.fillMaxSize(), cornerRadius = 24.dp, isDark = true) {
-                    Text("Widget Error", color = Color.White, modifier = Modifier.align(Alignment.Center))
+        androidx.compose.animation.Crossfade(targetState = currentIndex) { _ ->
+            if (currentWidget != null) {
+                val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
+                val appWidgetInfo = appWidgetManager.getAppWidgetInfo(currentWidget.appWidgetId)
+                if (appWidgetInfo != null) {
+                    AndroidView(
+                        factory = { ctx -> appWidgetHost.createView(ctx, currentWidget.appWidgetId, appWidgetInfo).apply { setPadding(0, 0, 0, 0) } },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    GlassBox(modifier = Modifier.fillMaxSize(), cornerRadius = 24.dp, isDark = true) {
+                        Text("Widget Error", color = Color.White, modifier = Modifier.align(Alignment.Center))
+                    }
                 }
             }
         }

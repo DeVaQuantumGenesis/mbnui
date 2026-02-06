@@ -28,6 +28,8 @@ import com.example.mbnui.ui.components.OneUiMenu
 import com.example.mbnui.ui.components.OneUiMenuItem
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 
 @Composable
 fun AppDrawer(

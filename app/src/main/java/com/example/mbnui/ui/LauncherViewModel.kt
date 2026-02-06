@@ -326,6 +326,24 @@ class LauncherViewModel @Inject constructor(
         _homeItems.value = _homeItems.value + stack
     }
 
+    fun addWidgetToStack(stackId: String, appWidgetId: Int, providerName: String, label: String) {
+        val widget = LauncherWidget(appWidgetId = appWidgetId, providerName = providerName, label = label)
+        _homeItems.value = _homeItems.value.map {
+            if (it is HomeWidgetStack && it.id == stackId) {
+                it.copy(widgets = it.widgets + widget)
+            } else it
+        }
+    }
+
+    fun removeWidgetFromStack(stackId: String, widgetId: String) {
+        _homeItems.value = _homeItems.value.mapNotNull {
+            if (it is HomeWidgetStack && it.id == stackId) {
+                val newWidgets = it.widgets.filter { w -> w.id != widgetId }
+                if (newWidgets.isEmpty()) null else it.copy(widgets = newWidgets)
+            } else it
+        }
+    }
+
     fun removeItem(item: HomeItem) {
         _homeItems.value = _homeItems.value.filter { it.id != item.id }
     }
