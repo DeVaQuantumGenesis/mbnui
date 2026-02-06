@@ -17,6 +17,11 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import androidx.compose.runtime.Immutable
+import android.content.SharedPreferences
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import com.google.gson.Gson
 
 @Immutable
 data class AppInfo(
@@ -36,6 +41,9 @@ class AppRepository @Inject constructor(
 ) {
     private val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
     private val userManager = context.getSystemService(Context.USER_SERVICE) as UserManager
+    private val prefs: SharedPreferences = context.getSharedPreferences("launcher_prefs", Context.MODE_PRIVATE)
+    private val json = Json { ignoreUnknownKeys = true }
+    private val gson = Gson()
 
     suspend fun getInstalledApps(): List<AppInfo> = withContext(Dispatchers.IO) {
         val profiles = userManager.userProfiles
@@ -83,5 +91,24 @@ class AppRepository @Inject constructor(
     fun getWidgetProviders(): List<android.appwidget.AppWidgetProviderInfo> {
         val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
         return appWidgetManager.installedProviders
+    }
+
+    fun saveHomeItems(items: List<HomeItem>) {
+        val jsonString = gson.toJson(items)
+        prefs.edit().putString("home_items", jsonString).apply()
+    }
+
+    fun loadHomeItems(): List<HomeItem> {
+        val jsonString = prefs.getString("home_items", null)
+        return if (jsonString != null) {
+            try {
+                val type = object : com.google.gson.reflect.TypeToken<List<HomeItem>>() {}.type
+                gson.fromJson(jsonString, type) ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
     }
 }

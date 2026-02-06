@@ -13,10 +13,14 @@ sealed class HomeItem {
 @Immutable
 data class HomeApp(
     override val id: String = UUID.randomUUID().toString(),
-    val appInfo: AppInfo,
+    val packageName: String,
+    val className: String,
     override val x: Int,
     override val y: Int
-) : HomeItem()
+) : HomeItem() {
+    // Non-serializable field, populated at runtime
+    var appInfo: AppInfo? = null
+}
 
 @Immutable
 data class HomeFolder(

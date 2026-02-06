@@ -70,6 +70,20 @@ class LauncherViewModel @Inject constructor(
     init {
         loadApps()
         loadWidgets()
+        // Load home items after apps are loaded
+        viewModelScope.launch {
+            _apps.collect { apps ->
+                if (apps.isNotEmpty()) {
+                    loadHomeItems()
+                }
+            }
+        }
+        // Save home items whenever they change
+        viewModelScope.launch {
+            homeItems.collect { items ->
+                repository.saveHomeItems(items)
+            }
+        }
     }
 
     fun onSearchQueryChange(query: String) {
@@ -211,7 +225,7 @@ class LauncherViewModel @Inject constructor(
     private fun createFolder(item1: HomeApp, item2: HomeApp) {
         val newFolder = HomeFolder(
             title = "Folder",
-            items = listOf(item2, item1), // Order collision first then dropped
+            items = listOf(item1, item2), // Order collision first then dropped
             x = item2.x,
             y = item2.y
         )
@@ -315,7 +329,9 @@ class LauncherViewModel @Inject constructor(
     }
 
     private fun addAppToHome(app: AppInfo, x: Int, y: Int) {
-        val newItem = HomeApp(appInfo = app, x = x, y = y)
+        val newItem = HomeApp(packageName = app.packageName, className = app.className, x = x, y = y).apply {
+            appInfo = app
+        }
         _homeItems.value = _homeItems.value + newItem
     }
 
@@ -397,6 +413,23 @@ class LauncherViewModel @Inject constructor(
             val item = currentList.removeAt(fromIndex)
             currentList.add(toIndex, item)
             _apps.value = currentList
+        }
+    }
+
+    fun loadHomeItems() {
+        val savedItems = repository.loadHomeItems()
+        if (savedItems.isNotEmpty()) {
+            // Populate appInfo for HomeApp items
+            val appsMap = _apps.value.associateBy { "${it.packageName}_${it.className}" }
+            val populatedItems = savedItems.map { item ->
+                when (item) {
+                    is HomeApp -> item.copy().apply {
+                        appInfo = appsMap["${item.packageName}_${item.className}"]
+                    }
+                    else -> item
+                }
+            }
+            _homeItems.value = populatedItems
         }
     }
 

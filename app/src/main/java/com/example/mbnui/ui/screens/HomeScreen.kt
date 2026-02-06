@@ -322,7 +322,7 @@ fun HomeScreen(
                                 }
                             ) {
                                  when (item) {
-                                    is HomeApp -> AppItem(app = item.appInfo, onClick = { rect -> viewModel.launchApp(item.appInfo, rect) })
+                                    is HomeApp -> AppItem(app = item.appInfo!!, onClick = { rect -> viewModel.launchApp(item.appInfo!!, rect) })
                                     is HomeWidgetStack -> WidgetStack(item, appWidgetHost, viewModel)
                                     is HomeFolder -> FolderIcon(folder = item)
                                 }
@@ -395,12 +395,12 @@ fun HomeScreen(
                                         OneUiMenuItem(
                                             text = "App Info",
                                             icon = android.R.drawable.ic_menu_info_details,
-                                            onClick = { viewModel.openAppInfo(item.appInfo); activeItem = null }
+                                            onClick = { viewModel.openAppInfo(item.appInfo!!); activeItem = null }
                                         )
                                         OneUiMenuItem(
                                             text = "Uninstall",
                                             icon = android.R.drawable.ic_notification_clear_all,
-                                            onClick = { viewModel.uninstallApp(item.appInfo); activeItem = null },
+                                            onClick = { viewModel.uninstallApp(item.appInfo!!); activeItem = null },
                                             isDestructive = true
                                         )
                                     }
@@ -550,7 +550,7 @@ fun HomeScreen(
                          if (draggingAppInfo != null) {
                              Image(bitmap = draggingAppInfo!!.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
                          } else if (item is HomeApp) {
-                             Image(bitmap = item.appInfo.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
+                             Image(bitmap = item.appInfo!!.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
                          } else if (item is HomeFolder) {
                              GlassBox(modifier = Modifier.fillMaxSize(), cornerRadius = 12.dp, isDark = true) { }
                          } else if (item is HomeWidgetStack) {
@@ -602,8 +602,8 @@ fun HomeScreen(
                                              )
                                          }
                                  ) {
-                                     AppItem(app = app.appInfo, onClick = { rect ->
-                                         viewModel.launchApp(app.appInfo, rect)
+                                     AppItem(app = app.appInfo!!, onClick = { rect ->
+                                         viewModel.launchApp(app.appInfo!!, rect)
                                          activeFolderId = null
                                      })
                                  }
@@ -686,7 +686,7 @@ fun FolderIcon(folder: HomeFolder) {
                          repeat(2) { colIndex ->
                              val index = rowIndex * 2 + colIndex
                              if (index < previewApps.size) {
-                                 Image(bitmap = previewApps[index].appInfo.icon, contentDescription = null, modifier = Modifier.weight(1f).fillMaxHeight())
+                                 Image(bitmap = previewApps[index].appInfo!!.icon, contentDescription = null, modifier = Modifier.weight(1f).fillMaxHeight())
                              } else {
                                  Spacer(modifier = Modifier.weight(1f))
                              }
