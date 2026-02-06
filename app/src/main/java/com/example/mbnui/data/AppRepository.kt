@@ -9,6 +9,7 @@ import android.os.Process
 import android.os.UserHandle
 import android.os.UserManager
 import androidx.compose.ui.graphics.ImageBitmap
+import android.util.LruCache
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,6 +46,9 @@ class AppRepository @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true }
     private val gson = Gson()
 
+    // Simple in-memory LRU cache for app icons to avoid repeated conversions
+    private val iconCache = object : LruCache<String, ImageBitmap>(128) {}
+
     suspend fun getInstalledApps(): List<AppInfo> = withContext(Dispatchers.IO) {
         val profiles = userManager.userProfiles
         val allApps = mutableListOf<AppInfo>()
@@ -54,8 +58,31 @@ class AppRepository @Inject constructor(
                 val packageName = activityInfo.applicationInfo.packageName
                 val className = activityInfo.name
                 val name = activityInfo.label.toString()
-                val icon = activityInfo.getIcon(0).toBitmap().asImageBitmap()
-                
+                val key = "${packageName}_${className}_${profile.hashCode()}"
+                // Check for user-provided override URI first
+                val overrideUri = prefs.getString("icon_override_$key", null)
+                val icon = if (!overrideUri.isNullOrEmpty()) {
+                    try {
+                        val uri = android.net.Uri.parse(overrideUri)
+                        context.contentResolver.openInputStream(uri)?.use { stream ->
+                            val bmp = android.graphics.BitmapFactory.decodeStream(stream).asImageBitmap()
+                            iconCache.put(key, bmp)
+                            bmp
+                        } ?: run {
+                            // fallback to default
+                            iconCache.get(key) ?: activityInfo.getIcon(0).toBitmap().asImageBitmap().also { iconCache.put(key, it) }
+                        }
+                    } catch (e: Exception) {
+                        iconCache.get(key) ?: activityInfo.getIcon(0).toBitmap().asImageBitmap().also { iconCache.put(key, it) }
+                    }
+                } else {
+                    iconCache.get(key) ?: run {
+                        val bmp = activityInfo.getIcon(0).toBitmap().asImageBitmap()
+                        iconCache.put(key, bmp)
+                        bmp
+                    }
+                }
+
                 allApps.add(AppInfo(packageName, className, profile, name, icon))
             }
         }
@@ -130,6 +157,35 @@ class AppRepository @Inject constructor(
     fun saveHomeItems(items: List<HomeItem>) {
         val jsonString = gson.toJson(items)
         prefs.edit().putString("home_items", jsonString).apply()
+    }
+
+    fun setAppIconOverride(packageName: String, className: String, userHandleHash: Int, uriString: String?) {
+        val key = "${packageName}_${className}_${userHandleHash}"
+        if (uriString == null) {
+            prefs.edit().remove("icon_override_$key").apply()
+            iconCache.remove(key)
+        } else {
+            prefs.edit().putString("icon_override_$key", uriString).apply()
+            // remove any cached entry so it is reloaded next time
+            iconCache.remove(key)
+        }
+    }
+
+    fun getAppIconOverride(packageName: String, className: String, userHandleHash: Int): String? {
+        val key = "${packageName}_${className}_${userHandleHash}"
+        return prefs.getString("icon_override_$key", null)
+    }
+
+    fun loadNotificationCounts(): Map<String, Int> {
+        val map = mutableMapOf<String, Int>()
+        prefs.all.forEach { (k, v) ->
+            if (k.startsWith("notif_count_")) {
+                val pkg = k.removePrefix("notif_count_")
+                val count = (v as? Int) ?: try { (v as String).toInt() } catch (e: Exception) { 0 }
+                map[pkg] = count
+            }
+        }
+        return map
     }
 
     fun loadHomeItems(): List<HomeItem> {

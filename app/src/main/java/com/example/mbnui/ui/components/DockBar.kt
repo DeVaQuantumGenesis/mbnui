@@ -13,6 +13,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.scale
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.sp
  
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -24,6 +26,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AnimatedDock(
     apps: List<AppInfo>,
+    notificationCounts: Map<String, Int> = emptyMap(),
     modifier: Modifier = Modifier,
     maxScale: Float = 0.42f,
     spreadDp: Float = 88f,
@@ -103,7 +106,19 @@ fun AnimatedDock(
                     .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(16.dp))
                     .scale(scale)
                 ) {
-                    Image(bitmap = app.icon, contentDescription = app.name, modifier = Modifier.fillMaxSize().padding(6.dp))
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Image(bitmap = app.icon, contentDescription = app.name, modifier = Modifier.fillMaxSize().padding(6.dp))
+                        val bc = notificationCounts[app.packageName] ?: 0
+                        if (bc > 0) {
+                            Box(modifier = Modifier
+                                .size(16.dp)
+                                .align(Alignment.TopEnd)
+                                .offset(x = 2.dp, y = (-2).dp)
+                                .background(Color(0xFFE53935), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                                Text(text = if (bc > 99) "99+" else bc.toString(), color = Color.White, fontSize = 9.sp)
+                            }
+                        }
+                    }
                 }
             }
         }

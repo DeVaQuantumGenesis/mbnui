@@ -47,6 +47,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.runtime.*
+import androidx.compose.runtime.derivedStateOf
+import com.example.mbnui.BuildConfig
 import android.util.Log
 import com.example.mbnui.data.HomeApp
 import com.example.mbnui.data.HomeItem
@@ -90,7 +92,9 @@ fun HomeScreen(
     val apps by viewModel.filteredApps.collectAsState()
     val homeItems by viewModel.homeItems.collectAsState()
     val isSimpleMode by viewModel.simpleMode.collectAsState()
-    val filteredHomeItems = if (isSimpleMode) homeItems.filter { it !is HomeWidgetStack } else homeItems
+    val filteredHomeItems by remember(homeItems, isSimpleMode) {
+        derivedStateOf { if (isSimpleMode) homeItems.filter { it !is HomeWidgetStack } else homeItems }
+    }
     val isCustomizing by viewModel.isCustomizing.collectAsState()
     val draggingAppInfo by viewModel.draggingItem.collectAsState()
     val draggingHomeItemId by viewModel.draggingItemId.collectAsState()
@@ -100,6 +104,7 @@ fun HomeScreen(
     val gridCols by viewModel.gridCols.collectAsState()
     val gridRows by viewModel.gridRows.collectAsState()
     val launchingApp by viewModel.launchingApp.collectAsState()
+    val notificationCounts by viewModel.notificationCounts.collectAsState()
     
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -150,19 +155,45 @@ fun HomeScreen(
         pendingProviderInfo = null
     }
 
+    // Image picker for custom icon override
+    val pickIconLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null && activeApp != null) {
+            viewModel.setAppIconOverride(activeApp!!.packageName, activeApp!!.className, activeApp!!.userHandle.hashCode(), uri.toString())
+            activeApp = null
+        }
+    }
+
+    // Listen for notification count broadcasts from NotificationListenerService
+    val notifAction = "com.example.mbnui.ACTION_NOTIFICATION_COUNT_CHANGED"
+    DisposableEffect(Unit) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+                if (intent == null) return
+                val pkg = intent.getStringExtra("package") ?: return
+                val count = intent.getIntExtra("count", 0)
+                viewModel.setNotificationCount(pkg, count)
+            }
+        }
+        val filter = android.content.IntentFilter(notifAction)
+        context.registerReceiver(receiver, filter)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+
     fun requestAddWidget(provider: android.appwidget.AppWidgetProviderInfo) {
         val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
         val id = appWidgetHost.allocateAppWidgetId()
         val allowed = appWidgetManager.bindAppWidgetIdIfAllowed(id, provider.provider)
-        if (allowed) {
-            if (pendingTargetStackId != null) {
-                Log.d("HomeScreen", "requestAddWidget: binding for stack=${pendingTargetStackId}")
-                viewModel.addWidgetToStack(pendingTargetStackId!!, id, provider.provider.className, provider.loadLabel(context.packageManager))
-                pendingTargetStackId = null
-            } else {
-                Log.d("HomeScreen", "requestAddWidget: binding for new widget id=$id")
-                viewModel.addWidget(id, provider.provider.className, provider.loadLabel(context.packageManager), 0, 0)
-            }
+                if (allowed) {
+                    if (pendingTargetStackId != null) {
+                        if (BuildConfig.DEBUG) Log.d("HomeScreen", "requestAddWidget: binding for stack=${pendingTargetStackId}")
+                        viewModel.addWidgetToStack(pendingTargetStackId!!, id, provider.provider.className, provider.loadLabel(context.packageManager))
+                        pendingTargetStackId = null
+                    } else {
+                        if (BuildConfig.DEBUG) Log.d("HomeScreen", "requestAddWidget: binding for new widget id=$id")
+                        viewModel.addWidget(id, provider.provider.className, provider.loadLabel(context.packageManager), 0, 0)
+                    }
             showWidgetPicker = false
         } else {
             pendingWidgetId = id
@@ -248,8 +279,8 @@ fun HomeScreen(
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val containerWidth = maxWidth
                     val containerHeight = maxHeight
-                    val calculatedCellWidth = containerWidth / gridCols
-                    val calculatedCellHeight = containerHeight / gridRows
+                    val calculatedCellWidth = remember(containerWidth, gridCols) { containerWidth / gridCols }
+                    val calculatedCellHeight = remember(containerHeight, gridRows) { containerHeight / gridRows }
                     
                     if (draggingHomeItemId != null || draggingAppInfo != null) {
                          val currentDrag = dragOffset ?: Pair(0f, 0f)
@@ -343,8 +374,8 @@ fun HomeScreen(
                                  when (item) {
                                     is HomeApp -> {
                                         val appInfo = item.appInfo
-                                        if (appInfo != null) {
-                                            AppItem(app = appInfo, onClick = { rect -> viewModel.launchApp(appInfo, rect) })
+                                            if (appInfo != null) {
+                                            AppItem(app = appInfo, badgeCount = notificationCounts[appInfo.packageName] ?: 0, onClick = { rect -> viewModel.launchApp(appInfo, rect) })
                                         } else {
                                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                                 Text("Loading...", color = Color.White)
@@ -422,6 +453,11 @@ fun HomeScreen(
                                     if (item is HomeApp) {
                                         val info = item.appInfo
                                         OneUiMenuItem(
+                                            text = "Set Icon",
+                                            icon = android.R.drawable.ic_menu_gallery,
+                                            onClick = { info?.let { activeApp = it; pickIconLauncher.launch("image/*") }; activeItem = null }
+                                        )
+                                        OneUiMenuItem(
                                             text = "App Info",
                                             icon = android.R.drawable.ic_menu_info_details,
                                             onClick = { info?.let { viewModel.openAppInfo(it) }; activeItem = null }
@@ -444,8 +480,8 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
-                GlassBox(modifier = Modifier.width(320.dp).height(96.dp), cornerRadius = 28.dp, isDark = true) {
-                        AnimatedDock(apps = apps.take(4), modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp), onAppClick = { app, rect ->
+                        GlassBox(modifier = Modifier.width(320.dp).height(96.dp), cornerRadius = 28.dp, isDark = true) {
+                        AnimatedDock(apps = apps.take(4), notificationCounts = notificationCounts, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp), onAppClick = { app, rect ->
                             // Launch app with bounds for overlay animation
                             viewModel.launchApp(app, rect)
                         })
@@ -455,6 +491,7 @@ fun HomeScreen(
 
         AppDrawer(
             apps = apps,
+            notificationCounts = notificationCounts,
             offsetY = drawerOffsetY,
             onClose = { drawerProgress = if (drawerProgress < 0.5f) 0f else 1f },
             onDrag = { dragAmount ->
@@ -583,7 +620,7 @@ fun HomeScreen(
                                     ) {
                                         val info = app.appInfo
                                         if (info != null) {
-                                            AppItem(app = info, onClick = { rect ->
+                                            AppItem(app = info, badgeCount = notificationCounts[info.packageName] ?: 0, onClick = { rect ->
                                                 viewModel.launchApp(info, rect)
                                                 activeFolderId = null
                                             })

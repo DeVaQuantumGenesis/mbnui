@@ -35,6 +35,7 @@ import androidx.compose.ui.layout.boundsInWindow
 fun AppDrawer(
     apps: List<AppInfo>,
     offsetY: Float,
+    notificationCounts: Map<String, Int> = emptyMap(),
     onClose: () -> Unit,
     onDrag: (Float) -> Unit,
     onAppClick: (AppInfo, Rect) -> Unit,
@@ -151,7 +152,7 @@ fun AppDrawer(
                         ) {
                             var appRect by remember { mutableStateOf(Rect.Zero) }
                             Box(modifier = Modifier.onGloballyPositioned { appRect = it.boundsInWindow() }) {
-                                AppItem(app) { rect ->
+                                AppItem(app, notificationCounts[app.packageName] ?: 0) { rect ->
                                     onAppClick(app, rect)
                                 }
                             }

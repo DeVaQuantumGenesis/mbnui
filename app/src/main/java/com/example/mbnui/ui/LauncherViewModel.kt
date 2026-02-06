@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import androidx.compose.ui.geometry.Rect
 import kotlinx.coroutines.delay
 import android.util.Log
+import com.example.mbnui.BuildConfig
 
 @HiltViewModel
 class LauncherViewModel @Inject constructor(
@@ -70,8 +71,29 @@ class LauncherViewModel @Inject constructor(
     private val _predictiveApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val predictiveApps: StateFlow<List<AppInfo>> = _predictiveApps.asStateFlow()
     
+    private val _notificationCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val notificationCounts: StateFlow<Map<String, Int>> = _notificationCounts.asStateFlow()
+    
     fun setDraggingItem(app: AppInfo?) {
         _draggingItem.value = app
+    }
+
+    fun setNotificationCount(packageName: String, count: Int) {
+        _notificationCounts.value = _notificationCounts.value.toMutableMap().also { it[packageName] = count }
+    }
+
+    fun clearNotificationCount(packageName: String) {
+        val m = _notificationCounts.value.toMutableMap()
+        m.remove(packageName)
+        _notificationCounts.value = m
+    }
+
+    fun setAppIconOverride(packageName: String, className: String, userHandleHash: Int, uriString: String?) {
+        viewModelScope.launch {
+            repository.setAppIconOverride(packageName, className, userHandleHash, uriString)
+            // Refresh apps so new icons propagate
+            loadApps()
+        }
     }
 
     init {
@@ -84,6 +106,11 @@ class LauncherViewModel @Inject constructor(
                     loadHomeItems()
                 }
             }
+        }
+        // Load persisted notification counts
+        viewModelScope.launch {
+            val counts = repository.loadNotificationCounts()
+            _notificationCounts.value = counts
         }
         // Save home items whenever they change
         viewModelScope.launch {
@@ -352,7 +379,7 @@ class LauncherViewModel @Inject constructor(
 
     fun addWidgetToStack(stackId: String, appWidgetId: Int, providerName: String, label: String) {
         val widget = LauncherWidget(appWidgetId = appWidgetId, providerName = providerName, label = label)
-        Log.d("LauncherViewModel", "addWidgetToStack stack=$stackId widgetId=$appWidgetId provider=$providerName")
+        if (BuildConfig.DEBUG) Log.d("LauncherViewModel", "addWidgetToStack stack=$stackId widgetId=$appWidgetId provider=$providerName")
         _homeItems.value = _homeItems.value.map {
             if (it is HomeWidgetStack && it.id == stackId) {
                 it.copy(widgets = it.widgets + widget)
@@ -361,7 +388,7 @@ class LauncherViewModel @Inject constructor(
     }
 
     fun removeWidgetFromStack(stackId: String, widgetId: String) {
-        Log.d("LauncherViewModel", "removeWidgetFromStack stack=$stackId widgetId=$widgetId")
+        if (BuildConfig.DEBUG) Log.d("LauncherViewModel", "removeWidgetFromStack stack=$stackId widgetId=$widgetId")
         _homeItems.value = _homeItems.value.mapNotNull {
             if (it is HomeWidgetStack && it.id == stackId) {
                 val newWidgets = it.widgets.filter { w -> w.id != widgetId }
@@ -371,7 +398,7 @@ class LauncherViewModel @Inject constructor(
     }
 
     fun setWidgetStackIndex(stackId: String, index: Int) {
-        Log.d("LauncherViewModel", "setWidgetStackIndex stack=$stackId index=$index")
+        if (BuildConfig.DEBUG) Log.d("LauncherViewModel", "setWidgetStackIndex stack=$stackId index=$index")
         _homeItems.value = _homeItems.value.map {
             if (it is HomeWidgetStack && it.id == stackId) it.copy(currentIndex = index.coerceIn(0, it.widgets.size - 1)) else it
         }

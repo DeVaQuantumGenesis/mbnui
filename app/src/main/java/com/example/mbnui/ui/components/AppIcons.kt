@@ -3,6 +3,7 @@ package com.example.mbnui.ui.components
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -28,8 +29,12 @@ import com.example.mbnui.data.AppInfo
 @Composable
 fun AppItem(
     app: AppInfo,
+    badgeCount: Int = 0,
     onClick: (Rect) -> Unit
 ) {
+    // badgeCount shows active notifications for the app
+    fun Int.coerceBadgeText(): String = if (this <= 0) "" else if (this > 99) "99+" else this.toString()
+    
     var itemRect by remember { mutableStateOf(Rect.Zero) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -60,11 +65,22 @@ fun AppItem(
                 .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
                 .clip(RoundedCornerShape(24.dp))
         ) {
-             Image(
-                bitmap = app.icon,
-                contentDescription = app.name,
-                modifier = Modifier.fillMaxSize()
-            )
+             Box(modifier = Modifier.fillMaxSize()) {
+                 Image(
+                    bitmap = app.icon,
+                    contentDescription = app.name,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (badgeCount > 0) {
+                    Box(modifier = Modifier
+                        .size(18.dp)
+                        .align(Alignment.TopEnd)
+                        .offset(x = 4.dp, y = (-4).dp)
+                        .background(Color(0xFFE53935), CircleShape), contentAlignment = Alignment.Center) {
+                        Text(text = badgeCount.coerceBadgeText(), color = Color.White, fontSize = 10.sp)
+                    }
+                }
+            }
         }
         
         Spacer(modifier = Modifier.height(4.dp))
@@ -83,6 +99,7 @@ fun AppItem(
 @Composable
 fun DockItem(
     app: AppInfo,
+    badgeCount: Int = 0,
     onClick: (Rect) -> Unit
 ) {
     var itemRect by remember { mutableStateOf(Rect.Zero) }
@@ -105,10 +122,21 @@ fun DockItem(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Image(
-            bitmap = app.icon,
-            contentDescription = app.name,
-            modifier = Modifier.fillMaxSize().padding(4.dp)
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Image(
+                bitmap = app.icon,
+                contentDescription = app.name,
+                modifier = Modifier.fillMaxSize().padding(4.dp)
+            )
+            if (badgeCount > 0) {
+                Box(modifier = Modifier
+                    .size(16.dp)
+                    .align(Alignment.TopEnd)
+                    .offset(x = 2.dp, y = (-2).dp)
+                    .background(Color(0xFFE53935), CircleShape), contentAlignment = Alignment.Center) {
+                    Text(text = badgeCount.coerceBadgeText(), color = Color.White, fontSize = 9.sp)
+                }
+            }
+        }
     }
 }
