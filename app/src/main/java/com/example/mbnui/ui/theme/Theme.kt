@@ -20,15 +20,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import com.example.mbnui.ui.theme.AppTypography
 
 // 外部の Color.kt との衝突を避けるため、このファイルで使用する色を定義
-private val ThemePurple80 = Color(0xFFD0BCFF)
-private val ThemePurpleGrey80 = Color(0xFFCCC2DC)
-private val ThemePink80 = Color(0xFFEFB8C8)
+private val ThemePurple80 = Color(0xFFE1BEE7) // More expressive purple
+private val ThemePurpleGrey80 = Color(0xFFB39DDB) // Brighter secondary
+private val ThemePink80 = Color(0xFFF8BBD9) // More vibrant tertiary
 
-private val ThemePurple40 = Color(0xFF6650a4)
-private val ThemePurpleGrey40 = Color(0xFF625b71)
-private val ThemePink40 = Color(0xFF7D5260)
+private val ThemePurple40 = Color(0xFF9C27B0) // Deeper primary for light
+private val ThemePurpleGrey40 = Color(0xFF7B1FA2) // Richer secondary
+private val ThemePink40 = Color(0xFFE91E63) // Vivid tertiary
 
 // --- ダークモード用カラー構成 ---
 private val DarkColorScheme = darkColorScheme(
@@ -46,11 +47,11 @@ private val LightColorScheme = lightColorScheme(
 
 // --- カスタム形状の定義 ---
 private val ExpressiveShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(28.dp),
-    extraLarge = RoundedCornerShape(32.dp)
+    extraSmall = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(16.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(32.dp),
+    extraLarge = RoundedCornerShape(36.dp)
 )
 
 @Composable
@@ -81,6 +82,7 @@ fun MbnuiTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         shapes = ExpressiveShapes,
+        typography = AppTypography,
         content = content
     )
 }

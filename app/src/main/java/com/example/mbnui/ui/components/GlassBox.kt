@@ -27,13 +27,13 @@ import com.example.mbnui.ui.theme.GlassWhiteBorder
 @Composable
 fun GlassBox(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 20.dp,
-    blurRadius: Dp = 16.dp,
+    cornerRadius: Dp = 24.dp,
+    blurRadius: Dp = 12.dp,
     isDark: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val backgroundColor = if (isDark) GlassBlack.copy(alpha = 0.4f) else GlassWhite.copy(alpha = 0.2f)
-    val borderColor = if (isDark) GlassBlackBorder.copy(alpha = 0.5f) else GlassWhiteBorder.copy(alpha = 0.6f)
+    val backgroundColor = if (isDark) GlassBlack.copy(alpha = 0.3f) else GlassWhite.copy(alpha = 0.15f)
+    val borderColor = if (isDark) GlassBlackBorder.copy(alpha = 0.4f) else GlassWhiteBorder.copy(alpha = 0.5f)
 
     Box(modifier = modifier) {
         // Blurred background layer
