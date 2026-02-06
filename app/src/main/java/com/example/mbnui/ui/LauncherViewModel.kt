@@ -59,9 +59,16 @@ class LauncherViewModel @Inject constructor(
     private val _isCustomizing = MutableStateFlow(false)
     val isCustomizing: StateFlow<Boolean> = _isCustomizing.asStateFlow()
 
+    private val _simpleMode = MutableStateFlow(true) // Default to simple mode
+    val simpleMode: StateFlow<Boolean> = _simpleMode.asStateFlow()
+
     data class LaunchingState(val app: AppInfo, val rect: Rect)
     private val _launchingApp = MutableStateFlow<LaunchingState?>(null)
     val launchingApp: StateFlow<LaunchingState?> = _launchingApp.asStateFlow()
+
+    // Predictive apps (recently launched apps shown on home)
+    private val _predictiveApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    val predictiveApps: StateFlow<List<AppInfo>> = _predictiveApps.asStateFlow()
     
     fun setDraggingItem(app: AppInfo?) {
         _draggingItem.value = app
@@ -398,6 +405,30 @@ class LauncherViewModel @Inject constructor(
                  val newApps = installed.map { currentMap[it.key] ?: it }
                  _apps.value = newApps
              }
+            // Update predictive list after loading apps
+            updatePredictiveApps()
+        }
+    }
+
+    private fun updatePredictiveApps() {
+        viewModelScope.launch {
+            val recent = repository.getRecentLaunches()
+            if (recent.isEmpty()) {
+                _predictiveApps.value = _apps.value.take(6)
+                return@launch
+            }
+            val byRecent = mutableListOf<AppInfo>()
+            val remaining = _apps.value.toMutableList()
+            recent.reversed().forEach { key ->
+                // key is component short string like package/class
+                val match = _apps.value.find { it.componentName.flattenToShortString() == key }
+                if (match != null && !byRecent.contains(match)) {
+                    byRecent.add(match)
+                    remaining.remove(match)
+                }
+            }
+            byRecent.addAll(remaining)
+            _predictiveApps.value = byRecent.take(6)
         }
     }
 
@@ -439,11 +470,18 @@ class LauncherViewModel @Inject constructor(
                 _launchingApp.value = LaunchingState(app, sourceRect)
                 delay(400) // Animation duration
                 repository.launchApp(app)
+                // Update predictive ordering after launch
+                updatePredictiveApps()
                 delay(500) // Keep overlay for a bit while app loads
                 _launchingApp.value = null
             }
         } else {
             repository.launchApp(app)
+            updatePredictiveApps()
         }
+    }
+
+    fun toggleSimpleMode() {
+        _simpleMode.value = !_simpleMode.value
     }
 }

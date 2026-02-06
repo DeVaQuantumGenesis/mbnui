@@ -64,7 +64,23 @@ class AppRepository @Inject constructor(
     }
 
     fun launchApp(app: AppInfo) {
+        // Record launch for predictive suggestions
+        try {
+            val recent = prefs.getStringSet("recent_launches", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+            // Use component key for stability
+            recent.remove(app.componentName.flattenToShortString())
+            recent.add(app.componentName.flattenToShortString())
+            // Keep only last 12
+            val trimmed = recent.toList().takeLast(12).toSet()
+            prefs.edit().putStringSet("recent_launches", trimmed).apply()
+        } catch (e: Exception) {
+            // ignore
+        }
         launcherApps.startMainActivity(app.componentName, app.userHandle, null, null)
+    }
+
+    fun getRecentLaunches(): List<String> {
+        return prefs.getStringSet("recent_launches", emptySet())?.toList() ?: emptyList()
     }
 
     fun openAppInfo(app: AppInfo) {

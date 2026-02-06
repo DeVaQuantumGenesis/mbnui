@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +23,9 @@ fun HomeSettingsSheet(
     currentGridCols: Int,
     onGridSizeChange: (Int, Int) -> Unit,
     onOpenWidgets: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isSimpleMode: Boolean,
+    onToggleSimpleMode: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -64,53 +68,76 @@ fun HomeSettingsSheet(
                  }
             }
             
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            Text(
-                "Grid",
-                color = Color.White.copy(0.7f),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            val gridOptions = listOf(
-                4 to 5,
-                4 to 6,
-                5 to 5,
-                5 to 6
-            )
-            
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Simple Mode Toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                gridOptions.forEach { (cols, rows) ->
-                    val isSelected = cols == currentGridCols && rows == currentGridRows
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(80.dp)
-                            .background(
-                                color = if (isSelected) Color(0xFF3D5AFE) else Color.White.copy(0.1f),
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                            .clickable { onGridSizeChange(cols, rows) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                painter = painterResource(android.R.drawable.ic_dialog_dialer), // Placeholder icon
-                                contentDescription = null,
-                                tint = if (isSelected) Color.White else Color.White.copy(0.5f),
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                "${cols}x${rows}",
-                                color = if (isSelected) Color.White else Color.White.copy(0.7f),
-                                fontWeight = FontWeight.SemiBold
-                            )
+                Text("Simple Mode", color = Color.White, fontSize = 16.sp)
+                Switch(
+                    checked = isSimpleMode,
+                    onCheckedChange = { onToggleSimpleMode() },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color.White.copy(0.3f),
+                        uncheckedThumbColor = Color.White.copy(0.7f),
+                        uncheckedTrackColor = Color.White.copy(0.2f)
+                    )
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+if (!isSimpleMode) {
+                Text(
+                    "Grid",
+                    color = Color.White.copy(0.7f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                val gridOptions = listOf(
+                    4 to 5,
+                    4 to 6,
+                    5 to 5,
+                    5 to 6
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    gridOptions.forEach { (cols, rows) ->
+                        val isSelected = cols == currentGridCols && rows == currentGridRows
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(80.dp)
+                                .background(
+                                    color = if (isSelected) Color(0xFF3D5AFE) else Color.White.copy(0.1f),
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                .clickable { onGridSizeChange(cols, rows) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    painter = painterResource(android.R.drawable.ic_dialog_dialer), // Placeholder icon
+                                    contentDescription = null,
+                                    tint = if (isSelected) Color.White else Color.White.copy(0.5f),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "${cols}x${rows}",
+                                    color = if (isSelected) Color.White else Color.White.copy(0.7f),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
                 }

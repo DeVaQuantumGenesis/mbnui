@@ -3,6 +3,7 @@ package com.example.mbnui.ui.components
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
@@ -34,8 +35,15 @@ fun AppLaunchOverlay(
         animProgress.animateTo(
             targetValue = 1f,
             animationSpec = tween(
-                durationMillis = 500,
-                easing = FastOutSlowInEasing
+                durationMillis = 700,
+                easing = { t ->
+                    // custom ease: slow start, quick middle, gentle overshoot
+                    val eased = FastOutSlowInEasing.transform(t)
+                    when {
+                        t < 0.85f -> eased
+                        else -> eased + (t - 0.85f) * 0.6f
+                    }
+                }
             )
         )
         onAnimationEnd()
@@ -44,14 +52,14 @@ fun AppLaunchOverlay(
     val progress = animProgress.value
     
     // Interpolate rect
-    val left = lerp(sourceRect.left / density.density, 0f, progress)
-    val top = lerp(sourceRect.top / density.density, 0f, progress)
-    val width = lerp(sourceRect.width / density.density, screenWidth.value, progress)
-    val height = lerp(sourceRect.height / density.density, screenHeight.value, progress)
-    val cornerRadius = lerp(24f, 28f, progress.coerceAtMost(0.5f)) // Keep some radius until nearly full
-    val finalCornerRadius = lerp(cornerRadius, 0f, (progress - 0.8f).coerceAtLeast(0f) * 5f)
+    val left = lerp(sourceRect.left / density.density, 0f, smoothStep(progress))
+    val top = lerp(sourceRect.top / density.density, 0f, smoothStep(progress))
+    val width = lerp(sourceRect.width / density.density, screenWidth.value, smoothStep(progress))
+    val height = lerp(sourceRect.height / density.density, screenHeight.value, smoothStep(progress))
+    val cornerRadius = lerp(24f, 20f, (progress * 1.2f).coerceAtMost(1f))
+    val finalCornerRadius = lerp(cornerRadius, 0f, ((progress - 0.75f) / 0.25f).coerceIn(0f, 1f))
     
-    val alpha = if (progress < 0.1f) progress * 10f else 1f
+    val alpha = lerp(0.2f, 1f, progress)
 
     Box(
         modifier = Modifier
@@ -63,29 +71,46 @@ fun AppLaunchOverlay(
                 .offset(x = left.dp, y = top.dp)
                 .size(width.dp, height.dp)
                 .clip(RoundedCornerShape(finalCornerRadius.dp))
-                .background(Color.White)
-                .alpha(alpha)
+                .background(
+                    Brush.verticalGradient(listOf(Color.White, Color(0xFFF7F7F8))),
+                )
         ) {
+            // subtle parallax icon
+            val iconOffset = lerp(0f, -screenWidth.value * 0.08f, progress)
             Image(
                 bitmap = app.icon,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(lerp(8f, screenWidth.value / 4, progress).dp) // Icon remains centered and scales
-                    .alpha(1f - progress),
+                    .padding(lerp(8f, screenWidth.value / 4, progress).dp)
+                    .offset(x = iconOffset.dp)
+                    .alpha(1f - progress * 0.6f),
                 contentScale = ContentScale.Fit
             )
-            
-            // App content mockup
+
+            // App content mockup with shimmer-like gradient
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.White.copy(alpha = progress))
-            )
+            ) {
+                // decorative gloss
+                Box(modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.linearGradient(listOf(Color.White.copy(alpha = 0.08f), Color.Transparent)),
+                    )
+                )
+            }
         }
     }
 }
 
 private fun lerp(start: Float, end: Float, fraction: Float): Float {
     return start + fraction * (end - start)
+}
+
+private fun smoothStep(t: Float): Float {
+    val x = t.coerceIn(0f, 1f)
+    return x * x * (3 - 2 * x)
 }

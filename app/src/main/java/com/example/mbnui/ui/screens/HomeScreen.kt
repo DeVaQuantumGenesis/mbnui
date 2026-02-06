@@ -31,6 +31,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
@@ -65,6 +66,8 @@ import com.example.mbnui.ui.components.AppItem
 import com.example.mbnui.ui.components.DockItem
 import com.example.mbnui.ui.components.OneUiMenu
 import com.example.mbnui.ui.components.OneUiMenuItem
+import com.example.mbnui.ui.components.EdgePanel
+import com.example.mbnui.ui.components.PredictiveBar
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -85,6 +88,8 @@ fun HomeScreen(
 ) {
     val apps by viewModel.filteredApps.collectAsState()
     val homeItems by viewModel.homeItems.collectAsState()
+    val isSimpleMode by viewModel.simpleMode.collectAsState()
+    val filteredHomeItems = if (isSimpleMode) homeItems.filter { it !is HomeWidgetStack } else homeItems
     val isCustomizing by viewModel.isCustomizing.collectAsState()
     val draggingAppInfo by viewModel.draggingItem.collectAsState()
     val draggingHomeItemId by viewModel.draggingItemId.collectAsState()
@@ -112,6 +117,7 @@ fun HomeScreen(
     val drawerOffsetY = animatedProgress * screenHeight.value
     var showWidgetPicker by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
+    var showEdgePanel by remember { mutableStateOf(false) }
 
     var activeItem by remember { mutableStateOf<HomeItem?>(null) }
     var activeApp by remember { mutableStateOf<AppInfo?>(null) }
@@ -203,6 +209,13 @@ fun HomeScreen(
                 .statusBarsPadding()
                 .alpha(1f - (1f - animatedProgress) * 0.8f)
                 .scale(1f - (1f - animatedProgress) * 0.05f)
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures { inputChange, dragAmount ->
+                        if (inputChange.position.x < 50f && dragAmount > 50f) { // Left edge swipe right
+                            showEdgePanel = true
+                        }
+                    }
+                }
         ) {
             Spacer(modifier = Modifier.height(48.dp))
             
@@ -219,6 +232,11 @@ fun HomeScreen(
                         }
                     }
             )
+            // Predictive apps row (Material/Pi xel like suggestions)
+            val predictive by viewModel.predictiveApps.collectAsState()
+            PredictiveBar(apps = predictive) { app ->
+                viewModel.launchApp(app, null)
+            }
             
             Box(
                 modifier = Modifier
@@ -256,7 +274,7 @@ fun HomeScreen(
                          )
                     }
 
-                    homeItems.forEach { item ->
+                    filteredHomeItems.forEach { item ->
                         val isBeingDragged = item.id == draggingHomeItemId
                         val isResizing = item.id == resizingWidgetId
                         
@@ -526,6 +544,13 @@ fun HomeScreen(
             onUninstall = { viewModel.uninstallApp(it) }
         )
 
+        if (showEdgePanel) {
+            EdgePanel(
+                isVisible = showEdgePanel,
+                onDismiss = { showEdgePanel = false }
+            )
+        }
+
         if (draggingHomeItemId != null || draggingAppInfo != null) {
             Box(modifier = Modifier.fillMaxSize().zIndex(100f)) {
                  dragOffset?.let { (x, y) ->
@@ -563,54 +588,60 @@ fun HomeScreen(
         
         val activeFolder = homeItems.find { it.id == activeFolderId } as? HomeFolder
         if (activeFolder != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(200f)
-                    .background(Color.Black.copy(alpha = 0.4f))
-                    .clickable { activeFolderId = null },
-                contentAlignment = Alignment.Center
+            androidx.compose.animation.AnimatedVisibility(
+                visible = true,
+                enter = androidx.compose.animation.fadeIn(tween(220)) + androidx.compose.animation.scaleIn(spring(Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), initialScale = 0.92f),
+                exit = androidx.compose.animation.fadeOut(tween(180)) + androidx.compose.animation.scaleOut(tween(180), targetScale = 0.95f)
             ) {
-                 GlassBox(modifier = Modifier.size(320.dp), cornerRadius = 28.dp, isDark = true) {
-                     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                         Text(
-                             text = activeFolder.title,
-                             color = Color.White,
-                             fontSize = 20.sp,
-                             textAlign = TextAlign.Center,
-                             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).clickable { renamingFolderId = activeFolder.id }
-                         )
-                         
-                         LazyVerticalGrid(
-                             columns = GridCells.Adaptive(minSize = 64.dp),
-                             modifier = Modifier.weight(1f),
-                             verticalArrangement = Arrangement.spacedBy(16.dp),
-                             horizontalArrangement = Arrangement.spacedBy(16.dp)
-                         ) {
-                              items(activeFolder.items.size) { index ->
-                                 val app = activeFolder.items[index]
-                                 Box(
-                                     modifier = Modifier
-                                         .pointerInput(activeFolder.id, index) {
-                                             detectDragGesturesAfterLongPress(
-                                                 onDragStart = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
-                                                 onDrag = { change, dragAmount -> 
-                                                     change.consume()
-                                                     if (dragAmount.x > 30) viewModel.reorderFolderItems(activeFolder.id, index, (index + 1).coerceAtMost(activeFolder.items.size - 1))
-                                                     if (dragAmount.x < -30) viewModel.reorderFolderItems(activeFolder.id, index, (index - 1).coerceAtLeast(0))
-                                                 }
-                                             )
-                                         }
-                                 ) {
-                                     AppItem(app = app.appInfo!!, onClick = { rect ->
-                                         viewModel.launchApp(app.appInfo!!, rect)
-                                         activeFolderId = null
-                                     })
-                                 }
-                             }
-                         }
-                     }
-                 }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(200f)
+                        .background(Color.Black.copy(alpha = 0.42f))
+                        .clickable { activeFolderId = null },
+                    contentAlignment = Alignment.Center
+                ) {
+                    GlassBox(modifier = Modifier.size(320.dp), cornerRadius = 28.dp, isDark = true) {
+                        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                            Text(
+                                text = activeFolder.title,
+                                color = Color.White,
+                                fontSize = 20.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).clickable { renamingFolderId = activeFolder.id }
+                            )
+
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(minSize = 64.dp),
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                items(activeFolder.items.size) { index ->
+                                    val app = activeFolder.items[index]
+                                    Box(
+                                        modifier = Modifier
+                                            .pointerInput(activeFolder.id, index) {
+                                                detectDragGesturesAfterLongPress(
+                                                    onDragStart = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                                                    onDrag = { change, dragAmount -> 
+                                                        change.consume()
+                                                        if (dragAmount.x > 30) viewModel.reorderFolderItems(activeFolder.id, index, (index + 1).coerceAtMost(activeFolder.items.size - 1))
+                                                        if (dragAmount.x < -30) viewModel.reorderFolderItems(activeFolder.id, index, (index - 1).coerceAtLeast(0))
+                                                    }
+                                                )
+                                            }
+                                    ) {
+                                        AppItem(app = app.appInfo!!, onClick = { rect ->
+                                            viewModel.launchApp(app.appInfo!!, rect)
+                                            activeFolderId = null
+                                        })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -645,7 +676,9 @@ fun HomeScreen(
                     showSettingsSheet = false
                 },
                 onOpenWidgets = { showSettingsSheet = false; showWidgetPicker = true },
-                onDismiss = { showSettingsSheet = false }
+                onDismiss = { showSettingsSheet = false },
+                isSimpleMode = isSimpleMode,
+                onToggleSimpleMode = { viewModel.toggleSimpleMode() }
             )
         }
 
