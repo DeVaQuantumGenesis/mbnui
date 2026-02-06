@@ -46,6 +46,7 @@ fun AppDrawer(
     onAppReorder: (Int, Int) -> Unit = { _, _ -> },
     onAppInfo: (AppInfo) -> Unit = {},
     onUninstall: (AppInfo) -> Unit = {},
+    onHideApp: (AppInfo) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -170,6 +171,14 @@ fun AppDrawer(
                                         text = "App Info",
                                         icon = android.R.drawable.ic_menu_info_details,
                                         onClick = { onAppInfo(app); showMenu = false }
+                                    )
+                                    OneUiMenuItem(
+                                        text = "Hide",
+                                        icon = android.R.drawable.ic_menu_close_clear_cancel,
+                                        onClick = {
+                                            onHideApp(app)
+                                            showMenu = false
+                                        }
                                     )
                                     OneUiMenuItem(
                                         text = "Uninstall",

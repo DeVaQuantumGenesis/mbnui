@@ -60,7 +60,25 @@ class AppRepository @Inject constructor(
             }
         }
         
-        allApps.sortedBy { it.name.lowercase() }
+        // Filter hidden apps
+        val hidden = prefs.getStringSet("hidden_apps", emptySet()) ?: emptySet()
+        allApps.filter { !hidden.contains(it.packageName) }.sortedBy { it.name.lowercase() }
+    }
+
+    fun hideApp(packageName: String) {
+        val set = prefs.getStringSet("hidden_apps", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+        set.add(packageName)
+        prefs.edit().putStringSet("hidden_apps", set).apply()
+    }
+
+    fun unhideApp(packageName: String) {
+        val set = prefs.getStringSet("hidden_apps", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+        set.remove(packageName)
+        prefs.edit().putStringSet("hidden_apps", set).apply()
+    }
+
+    fun isHidden(packageName: String): Boolean {
+        return prefs.getStringSet("hidden_apps", emptySet())?.contains(packageName) ?: false
     }
 
     fun launchApp(app: AppInfo) {

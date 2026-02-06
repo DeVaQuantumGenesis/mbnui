@@ -469,6 +469,7 @@ fun HomeScreen(
                 val targetY = (currentOffset.second / (screenHeightPx / gridRows)).roundToInt().coerceIn(0, gridRows - 1)
                 viewModel.onDragEnd(targetX, targetY) 
             },
+            onHideApp = { app -> viewModel.hideApp(app) },
             searchQuery = searchQuery,
             onSearchQueryChange = { viewModel.onSearchQueryChange(it) },
             onAppReorder = { from, to -> viewModel.onAppDrawerReorder(from, to) },

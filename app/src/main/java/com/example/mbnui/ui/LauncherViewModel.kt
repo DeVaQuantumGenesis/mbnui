@@ -438,6 +438,15 @@ class LauncherViewModel @Inject constructor(
         }
     }
 
+    fun hideApp(app: AppInfo) {
+        viewModelScope.launch {
+            repository.hideApp(app.packageName)
+            // reload apps and update predictive list
+            loadApps()
+            updatePredictiveApps()
+        }
+    }
+
     fun onAppDrawerReorder(fromIndex: Int, toIndex: Int) {
         val currentList = _apps.value.toMutableList()
         if (fromIndex in currentList.indices && toIndex in currentList.indices) {
