@@ -19,19 +19,33 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.geometry.Rect
+import kotlin.math.roundToInt
 
 @Composable
 fun OneUiMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    anchorBounds: Rect? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     if (expanded) {
+        val density = LocalDensity.current
+        val popupOffset = if (anchorBounds != null) {
+            val menuWidthPx = with(density) { 220.dp.toPx() }
+            val x = (anchorBounds.left + (anchorBounds.width - menuWidthPx) / 2f).roundToInt()
+            val y = anchorBounds.bottom.roundToInt()
+            IntOffset(x, y)
+        } else IntOffset(0, 0)
+
         Popup(
             onDismissRequest = onDismissRequest,
             properties = PopupProperties(focusable = true),
-            alignment = Alignment.TopCenter
+            alignment = Alignment.TopStart,
+            offset = popupOffset
         ) {
             Box(
                 modifier = Modifier

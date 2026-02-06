@@ -339,11 +339,11 @@ fun HomeScreen(
                                 }
                             }
 
-                            if (activeItem?.id == item.id) {
+                                if (activeItem?.id == item.id) {
                                 OneUiMenu(
                                     expanded = true,
                                     onDismissRequest = { activeItem = null },
-                                    modifier = Modifier.padding(top = 40.dp) // Adjust based on item size
+                                    anchorBounds = itemRect
                                 ) {
                                     OneUiMenuItem(
                                         text = "Remove",
@@ -440,15 +440,18 @@ fun HomeScreen(
                                     )
                                 }
                             ) {
-                                DockItem(app) { rect ->
-                                    viewModel.launchApp(app, rect)
+                                var dockRect by remember { mutableStateOf(Rect.Zero) }
+                                Box(modifier = Modifier.onGloballyPositioned { dockRect = it.boundsInWindow() }) {
+                                    DockItem(app) { rect ->
+                                        viewModel.launchApp(app, rect)
+                                    }
                                 }
 
                                 if (activeApp?.key == app.key) {
                                     OneUiMenu(
                                         expanded = true,
                                         onDismissRequest = { activeApp = null },
-                                        modifier = Modifier.padding(bottom = 60.dp) // Show above dock
+                                        anchorBounds = dockRect
                                     ) {
                                         OneUiMenuItem(
                                             text = "App Info",

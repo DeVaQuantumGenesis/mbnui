@@ -146,15 +146,18 @@ fun AppDrawer(
                                 )
                             }
                         ) {
-                            AppItem(app) { rect ->
-                                onAppClick(app, rect)
+                            var appRect by remember { mutableStateOf(Rect.Zero) }
+                            Box(modifier = Modifier.onGloballyPositioned { appRect = it.boundsInWindow() }) {
+                                AppItem(app) { rect ->
+                                    onAppClick(app, rect)
+                                }
                             }
 
                             if (showMenu) {
                                 OneUiMenu(
                                     expanded = true,
                                     onDismissRequest = { showMenu = false },
-                                    modifier = Modifier.padding(top = 40.dp)
+                                    anchorBounds = appRect
                                 ) {
                                     OneUiMenuItem(
                                         text = "Add to Home",
