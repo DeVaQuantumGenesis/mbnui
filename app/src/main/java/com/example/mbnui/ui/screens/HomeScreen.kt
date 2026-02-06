@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.runtime.*
+import android.util.Log
 import com.example.mbnui.data.HomeApp
 import com.example.mbnui.data.HomeItem
 import com.example.mbnui.data.HomeWidgetStack
@@ -148,9 +149,11 @@ fun HomeScreen(
         val allowed = appWidgetManager.bindAppWidgetIdIfAllowed(id, provider.provider)
         if (allowed) {
             if (pendingTargetStackId != null) {
+                Log.d("HomeScreen", "requestAddWidget: binding for stack=${pendingTargetStackId}")
                 viewModel.addWidgetToStack(pendingTargetStackId!!, id, provider.provider.className, provider.loadLabel(context.packageManager))
                 pendingTargetStackId = null
             } else {
+                Log.d("HomeScreen", "requestAddWidget: binding for new widget id=$id")
                 viewModel.addWidget(id, provider.provider.className, provider.loadLabel(context.packageManager), 0, 0)
             }
             showWidgetPicker = false
@@ -320,7 +323,7 @@ fun HomeScreen(
                             ) {
                                  when (item) {
                                     is HomeApp -> AppItem(app = item.appInfo, onClick = { rect -> viewModel.launchApp(item.appInfo, rect) })
-                                    is HomeWidgetStack -> WidgetStack(item, appWidgetHost)
+                                    is HomeWidgetStack -> WidgetStack(item, appWidgetHost, viewModel)
                                     is HomeFolder -> FolderIcon(folder = item)
                                 }
                             }
@@ -700,7 +703,8 @@ fun FolderIcon(folder: HomeFolder) {
 @Composable
 fun WidgetStack(
     stack: HomeWidgetStack,
-    appWidgetHost: android.appwidget.AppWidgetHost
+    appWidgetHost: android.appwidget.AppWidgetHost,
+    viewModel: com.example.mbnui.ui.LauncherViewModel
 ) {
     var currentIndex by remember { mutableIntStateOf(stack.currentIndex.coerceAtLeast(0)) }
     val context = LocalContext.current
@@ -729,6 +733,8 @@ fun WidgetStack(
                         userInteracting = true
                         if (dragAmount > 20) currentIndex = (currentIndex + 1) % stack.widgets.size
                         else if (dragAmount < -20) currentIndex = (currentIndex - 1 + stack.widgets.size) % stack.widgets.size
+                        // persist index to ViewModel so state survives recomposition
+                        viewModel.setWidgetStackIndex(stack.id, currentIndex)
                     },
                     onDragEnd = { userInteracting = false },
                     onDragCancel = { userInteracting = false }
@@ -741,10 +747,10 @@ fun WidgetStack(
                 val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
                 val appWidgetInfo = appWidgetManager.getAppWidgetInfo(currentWidget.appWidgetId)
                 if (appWidgetInfo != null) {
-                    AndroidView(
-                        factory = { ctx -> appWidgetHost.createView(ctx, currentWidget.appWidgetId, appWidgetInfo).apply { setPadding(0, 0, 0, 0) } },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                        AndroidView(
+                            factory = { ctx -> appWidgetHost.createView(ctx, currentWidget.appWidgetId, appWidgetInfo).apply { setPadding(0, 0, 0, 0) } },
+                            modifier = Modifier.fillMaxSize()
+                        )
                 } else {
                     GlassBox(modifier = Modifier.fillMaxSize(), cornerRadius = 24.dp, isDark = true) {
                         Text("Widget Error", color = Color.White, modifier = Modifier.align(Alignment.Center))

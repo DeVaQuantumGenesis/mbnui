@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import androidx.compose.ui.geometry.Rect
 import kotlinx.coroutines.delay
+import android.util.Log
 
 @HiltViewModel
 class LauncherViewModel @Inject constructor(
@@ -328,6 +329,7 @@ class LauncherViewModel @Inject constructor(
 
     fun addWidgetToStack(stackId: String, appWidgetId: Int, providerName: String, label: String) {
         val widget = LauncherWidget(appWidgetId = appWidgetId, providerName = providerName, label = label)
+        Log.d("LauncherViewModel", "addWidgetToStack stack=$stackId widgetId=$appWidgetId provider=$providerName")
         _homeItems.value = _homeItems.value.map {
             if (it is HomeWidgetStack && it.id == stackId) {
                 it.copy(widgets = it.widgets + widget)
@@ -336,11 +338,19 @@ class LauncherViewModel @Inject constructor(
     }
 
     fun removeWidgetFromStack(stackId: String, widgetId: String) {
+        Log.d("LauncherViewModel", "removeWidgetFromStack stack=$stackId widgetId=$widgetId")
         _homeItems.value = _homeItems.value.mapNotNull {
             if (it is HomeWidgetStack && it.id == stackId) {
                 val newWidgets = it.widgets.filter { w -> w.id != widgetId }
                 if (newWidgets.isEmpty()) null else it.copy(widgets = newWidgets)
             } else it
+        }
+    }
+
+    fun setWidgetStackIndex(stackId: String, index: Int) {
+        Log.d("LauncherViewModel", "setWidgetStackIndex stack=$stackId index=$index")
+        _homeItems.value = _homeItems.value.map {
+            if (it is HomeWidgetStack && it.id == stackId) it.copy(currentIndex = index.coerceIn(0, it.widgets.size - 1)) else it
         }
     }
 
