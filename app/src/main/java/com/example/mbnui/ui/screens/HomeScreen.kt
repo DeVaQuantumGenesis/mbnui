@@ -339,9 +339,18 @@ fun HomeScreen(
                                 .clickable(enabled = draggingHomeItemId == null && !isResizing && item is HomeFolder) {
                                     if (item is HomeFolder) activeFolderId = item.id
                                 }
-                            ) {
+                                ) {
                                  when (item) {
-                                    is HomeApp -> AppItem(app = item.appInfo!!, onClick = { rect -> viewModel.launchApp(item.appInfo!!, rect) })
+                                    is HomeApp -> {
+                                        val appInfo = item.appInfo
+                                        if (appInfo != null) {
+                                            AppItem(app = appInfo, onClick = { rect -> viewModel.launchApp(appInfo, rect) })
+                                        } else {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                Text("Loading...", color = Color.White)
+                                            }
+                                        }
+                                    }
                                     is HomeWidgetStack -> WidgetStack(item, appWidgetHost, viewModel)
                                     is HomeFolder -> FolderIcon(folder = item)
                                 }
@@ -411,15 +420,16 @@ fun HomeScreen(
                                         }
                                     }
                                     if (item is HomeApp) {
+                                        val info = item.appInfo
                                         OneUiMenuItem(
                                             text = "App Info",
                                             icon = android.R.drawable.ic_menu_info_details,
-                                            onClick = { viewModel.openAppInfo(item.appInfo!!); activeItem = null }
+                                            onClick = { info?.let { viewModel.openAppInfo(it) }; activeItem = null }
                                         )
                                         OneUiMenuItem(
                                             text = "Uninstall",
                                             icon = android.R.drawable.ic_notification_clear_all,
-                                            onClick = { viewModel.uninstallApp(item.appInfo!!); activeItem = null },
+                                            onClick = { info?.let { viewModel.uninstallApp(it) }; activeItem = null },
                                             isDestructive = true
                                         )
                                     }
@@ -504,11 +514,17 @@ fun HomeScreen(
                          modifier = Modifier
                             .offset(x = finalX.dp, y = finalY.dp)
                             .size(64.dp) 
-                     ) {
-                         if (draggingAppInfo != null) {
-                             Image(bitmap = draggingAppInfo!!.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
+                         ) {
+                         val dragInfo = draggingAppInfo
+                         if (dragInfo != null) {
+                             Image(bitmap = dragInfo.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
                          } else if (item is HomeApp) {
-                             Image(bitmap = item.appInfo!!.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
+                             val info = item.appInfo
+                             if (info != null) {
+                                 Image(bitmap = info.icon, contentDescription = null, modifier = Modifier.fillMaxSize())
+                             } else {
+                                 Box(modifier = Modifier.fillMaxSize()) { }
+                             }
                          } else if (item is HomeFolder) {
                              GlassBox(modifier = Modifier.fillMaxSize(), cornerRadius = 12.dp, isDark = true) { }
                          } else if (item is HomeWidgetStack) {
@@ -550,7 +566,7 @@ fun HomeScreen(
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                items(activeFolder.items.size) { index ->
+                                    items(activeFolder.items.size) { index ->
                                     val app = activeFolder.items[index]
                                     Box(
                                         modifier = Modifier
@@ -565,10 +581,15 @@ fun HomeScreen(
                                                 )
                                             }
                                     ) {
-                                        AppItem(app = app.appInfo!!, onClick = { rect ->
-                                            viewModel.launchApp(app.appInfo!!, rect)
-                                            activeFolderId = null
-                                        })
+                                        val info = app.appInfo
+                                        if (info != null) {
+                                            AppItem(app = info, onClick = { rect ->
+                                                viewModel.launchApp(info, rect)
+                                                activeFolderId = null
+                                            })
+                                        } else {
+                                            Box(modifier = Modifier.size(64.dp)) { }
+                                        }
                                     }
                                 }
                             }
@@ -649,10 +670,15 @@ fun FolderIcon(folder: HomeFolder) {
                 val previewApps = folder.items.take(4)
                 repeat(2) { rowIndex ->
                     Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                         repeat(2) { colIndex ->
+                             repeat(2) { colIndex ->
                              val index = rowIndex * 2 + colIndex
                              if (index < previewApps.size) {
-                                 Image(bitmap = previewApps[index].appInfo!!.icon, contentDescription = null, modifier = Modifier.weight(1f).fillMaxHeight())
+                                 val info = previewApps[index].appInfo
+                                 if (info != null) {
+                                     Image(bitmap = info.icon, contentDescription = null, modifier = Modifier.weight(1f).fillMaxHeight())
+                                 } else {
+                                     Spacer(modifier = Modifier.weight(1f))
+                                 }
                              } else {
                                  Spacer(modifier = Modifier.weight(1f))
                              }
